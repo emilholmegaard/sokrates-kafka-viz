@@ -1,10 +1,11 @@
 [tool.poetry]
-name = "sokrates-kafka-viz"
+name = "kafka-viz"
 version = "0.1.0"
 description = "Tool for visualizing Kafka microservices architecture using static code analysis"
 authors = ["Emil Holmegaard <emilholmegaard@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+packages = [{include = "kafka_viz"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -15,6 +16,7 @@ javalang = "^0.13.0"  # For Java source parsing
 requests = "^2.31.0"  # For Schema Registry
 tomli = "^2.0.0"     # For TOML parsing
 avro = "^1.11.0"     # For Avro schema validation
+networkx = "^3.0.0"  # For dependency graph analysis
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
