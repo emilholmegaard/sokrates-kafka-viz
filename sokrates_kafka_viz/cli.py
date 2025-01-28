@@ -33,7 +33,7 @@ def analyze(config: Optional[Path], verbose: bool):
     try:
         # Load configuration
         if not config:
-            config = Path('sokrates.yaml')
+            config = Path('kafka_viz_config.yaml')
         
         if not config.exists():
             raise ConfigurationError(f'Configuration file not found: {config}')

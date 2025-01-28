@@ -1,0 +1,37 @@
+analyzers:
+  service:
+    enabled: true
+    include_tests: false
+    paths:
+      - ./src
+      - ./services
+    exclude_patterns:
+      - '**/test/**'
+      - '**/mock/**'
+  
+  avro:
+    enabled: true
+    schema_registry: http://localhost:8081
+    cache_schemas: true
+    timeout_seconds: 30
+  
+  kafka:
+    enabled: true
+    topics_patterns:
+      - '^app\.'
+      - '^service\.'
+    exclude_patterns:
+      - '^_internal\.'
+    broker_config:
+      bootstrap_servers: 'localhost:9092'
+      security_protocol: 'PLAINTEXT'
+
+output:
+  format: json
+  path: ./analysis_output
+  include_details: true
+  group_by: ['service', 'topic']
+
+logging:
+  level: INFO
+  file: kafka_viz.log
