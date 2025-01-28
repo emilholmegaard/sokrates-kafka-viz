@@ -1,3 +1,2 @@
-"""Kafka visualization tool."""
-
+"""Kafka microservices visualization tool."""
 __version__ = "0.1.0"
