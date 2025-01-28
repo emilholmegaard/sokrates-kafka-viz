@@ -19,8 +19,15 @@ class KafkaAnalyzer:
         self.topics: Set[str] = set()
 
     def analyze_file(self, file_path: Path) -> None:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            print(f"Skipping binary file: {file_path}")
+            return
+        except Exception as e:
+            print(f"Error reading file {file_path}: {e}")
+            return
 
         # Detect service name from path or build file
         service_name = self._detect_service_name(file_path)
@@ -132,12 +139,15 @@ class KafkaAnalyzer:
         # Fallback to directory name if we couldn't extract from build file
         return build_file.parent.name
 
+app = typer.Typer()
+
+@app.command()
 def main(
-    source_dir: str = typer.Argument(..., help="Directory containing microservices source code"),
-    output: str = typer.Option("analysis_output.json", help="Output JSON file path")
+    source_dir: Path = typer.Argument(..., help="Directory containing microservices source code"),
+    output: Path = typer.Option("analysis_output.json", help="Output JSON file path")
 ):
     """Analyze Kafka microservices architecture from source code."""
-    analyzer = KafkaAnalyzer(source_dir)
+    analyzer = KafkaAnalyzer(str(source_dir))
     result = analyzer.analyze()
 
     with open(output, 'w', encoding='utf-8') as f:
@@ -146,4 +156,4 @@ def main(
     print(f"Analysis complete! Results written to {output}")
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
