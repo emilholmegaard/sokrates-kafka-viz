@@ -1,70 +1,121 @@
-# Kafka Visualization Tool
+# Sokrates Kafka Visualization Tool
 
-A tool for analyzing and visualizing Kafka-based microservices architecture.
+A tool for visualizing Kafka microservices architecture using static code analysis.
 
 ## Features
 
-- Detects Kafka producers and consumers in source code
-- Identifies message schemas (Avro and DTOs)
-- Shows service dependencies through Kafka topics
-- Supports multiple programming languages:
-  - Java/Kotlin/Scala (including Spring Cloud Stream)
-  - Python
-  - C#
-  - JavaScript/TypeScript
+- Service discovery through static code analysis
+- Avro schema analysis and validation
+- Kafka topic dependency mapping
+- Interactive visualization of service relationships
+- Configurable analysis rules
 
 ## Installation
 
-### From Source
-
 ```bash
-# Clone the repository
-git clone https://github.com/emilholmegaard/sokrates-kafka-viz.git
-cd sokrates-kafka-viz
-
-# Install with development dependencies
-pip install -e ".[dev]"
-
-# Or install without development dependencies
-pip install -e "."
+pip install sokrates-kafka-viz
 ```
-
-### Prerequisites
-
-- Python 3.8 or later
-- Graphviz (for visualization)
-  - Ubuntu/Debian: `sudo apt-get install graphviz`
-  - macOS: `brew install graphviz`
-  - Windows: Download from [Graphviz Downloads](https://graphviz.org/download/)
 
 ## Usage
 
-```bash
-# Analyze a directory containing microservices
-kafka-viz analyze /path/to/services
+1. Create a configuration file named `kafka_viz_config.yaml` in your project root:
 
-# Generate visualization
-kafka-viz visualize --output architecture.html
+```yaml
+analyzers:
+  service:
+    enabled: true
+    include_tests: false
+    paths:
+      - ./src
+      - ./services
+    exclude_patterns:
+      - '**/test/**'
+      - '**/mock/**'
+  
+  avro:
+    enabled: true
+    schema_registry: http://localhost:8081
+    cache_schemas: true
+    timeout_seconds: 30
+  
+  kafka:
+    enabled: true
+    topics_patterns:
+      - '^app\.'
+      - '^service\.'
+    exclude_patterns:
+      - '^_internal\.'
+    broker_config:
+      bootstrap_servers: 'localhost:9092'
+      security_protocol: 'PLAINTEXT'
 
-# Get help
-kafka-viz --help
+output:
+  format: json
+  path: ./analysis_output
+  include_details: true
+  group_by: ['service', 'topic']
+
+logging:
+  level: INFO
+  file: kafka_viz.log
 ```
 
-## Development
+2. Run the analysis:
 
 ```bash
-# Run tests
-pytest
-
-# Run linting
-flake8 kafka_viz tests
-black kafka_viz tests --check
-isort kafka_viz tests --check
-
-# Run type checking
-mypy kafka_viz
+sokrates-kafka-viz analyze
 ```
+
+Or specify a custom config file:
+
+```bash
+sokrates-kafka-viz analyze -c my_config.yaml
+```
+
+Use verbose output for debugging:
+
+```bash
+sokrates-kafka-viz analyze -v
+```
+
+## Analysis Output
+
+The tool generates a detailed analysis of your Kafka-based microservices architecture:
+
+- Service dependencies
+- Topic producers and consumers
+- Message schema compatibility
+- Service interaction patterns
+
+Results are saved in the specified output directory in the chosen format (JSON, YAML, or visualization).
+
+## Extending the Tool
+
+You can create custom analyzers by implementing the `BaseAnalyzer` interface:
+
+```python
+from sokrates_kafka_viz.core.analyzer import BaseAnalyzer
+from sokrates_kafka_viz.core.config import Config
+
+class CustomAnalyzer(BaseAnalyzer):
+    async def analyze(self, config: Config) -> Any:
+        # Implement your analysis logic here
+        pass
+```
+
+Then register your analyzer with the analysis runner:
+
+```python
+from sokrates_kafka_viz.core.runner import AnalysisRunner
+
+runner = AnalysisRunner(config)
+runner.register_analyzer(CustomAnalyzer())
+```
+
+## Contributing
+
+Contributions are welcome! Please check out our [Contributing Guide](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
