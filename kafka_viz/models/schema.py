@@ -30,6 +30,9 @@ class AvroSchema(Schema):
 @dataclass
 class DTOSchema(Schema):
     """Represents a DTO class."""
+    name: str
+    file_path: Path
     language: str
+    fields: Dict[str, str] = field(default_factory=dict)
     serialization_format: Optional[str] = None  # 'JSON', 'XML', etc.
     service_name: Optional[str] = None
