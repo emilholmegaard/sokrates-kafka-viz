@@ -1,56 +1,32 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "kafka-viz"
+[tool.poetry]
+name = "sokrates-kafka-viz"
 version = "0.1.0"
-description = "Tool for visualizing Kafka microservices architecture"
-readme = "README.md"
-authors = [{name = "Emil Holmegaard"}]
+description = "Tool for visualizing Kafka microservices architecture using static code analysis"
+authors = ["Emil Holmegaard <emilholmegaard@gmail.com>"]
 license = "MIT"
-requires-python = ">=3.8"
-dependencies = [
-    "graphviz>=0.20.1,<1.0",
-    "typer>=0.9.0,<1.0",
-    "rich>=13.7.0,<14.0",
-    "regex>=2023.12.25",
-    "avro-python3>=1.10.2,<2.0",
-    "prettytable>=3.9.0,<4.0",
-    "pyyaml>=6.0,<7.0"
-]
+readme = "README.md"
 
-[project.optional-dependencies]
-dev = [
-    # Testing
-    "pytest>=7.0,<8.0",
-    "pytest-cov>=4.0,<5.0",
-    
-    # Linting
-    "black>=22.0,<23.0",
-    "isort>=5.0,<6.0",
-    "flake8>=6.0,<7.0",
-    "mccabe>=0.6.0,<0.7.0",  # Explicit dependency to fix conflict
-    
-    # Type checking
-    "mypy>=1.0,<2.0",
-    "types-PyYAML",
-    "types-prettytable"
-]
+[tool.poetry.dependencies]
+python = "^3.8"
+typer = {extras = ["all"], version = "^0.9.0"}
+rich = "^13.0.0"
+graphviz = "^0.20.0"
+javalang = "^0.13.0"  # For Java source parsing
+requests = "^2.31.0"  # For Schema Registry
+tomli = "^2.0.0"     # For TOML parsing
+avro = "^1.11.0"     # For Avro schema validation
 
-[project.scripts]
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+black = "^22.3.0"
+flake8 = "^5.0.0"
+mypy = "^1.0.0"
+isort = "^5.10.0"
+responses = "^0.24.0"  # For mocking HTTP responses in tests
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
 kafka-viz = "kafka_viz.cli:app"
-
-[tool.black]
-line-length = 88
-target-version = ['py38']
-
-[tool.isort]
-profile = "black"
-line_length = 88
-
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true

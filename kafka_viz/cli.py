@@ -6,6 +6,7 @@ from rich.progress import Progress
 
 from .analyzers.kafka_analyzer import KafkaAnalyzer
 from .analyzers.service_analyzer import ServiceAnalyzer
+from .analyzers.avro_analyzer import AvroAnalyzer
 from .visualization.mermaid import MermaidGenerator
 from .models import ServiceCollection
 
@@ -35,18 +36,31 @@ def analyze(
         # Initialize analyzers
         service_analyzer = ServiceAnalyzer()
         kafka_analyzer = KafkaAnalyzer()
+        avro_analyzer = AvroAnalyzer()
         services = ServiceCollection()
 
         with Progress() as progress:
             # First pass: identify services
             task = progress.add_task("Identifying services...", total=None)
-            for service in service_analyzer.find_services(source_dir):
+            discovered_services = service_analyzer.find_services(source_dir)
+            for service in discovered_services.values():
                 services.add_service(service)
             progress.remove_task(task)
 
-            # Second pass: analyze Kafka usage
+            # Second pass: analyze schemas
             task = progress.add_task(
-                "Analyzing services...",
+                "Analyzing Avro schemas...",
+                total=len(services.services)
+            )
+            for service in services.services.values():
+                schemas = avro_analyzer.analyze_directory(service.root_path)
+                service.schemas.update(schemas)
+                progress.advance(task)
+            progress.remove_task(task)
+
+            # Third pass: analyze Kafka usage
+            task = progress.add_task(
+                "Analyzing Kafka usage...",
                 total=len(services.services)
             )
             for service in services.services.values():
@@ -64,6 +78,13 @@ def analyze(
                             "producers": list(topic.producers),
                             "consumers": list(topic.consumers)
                         } for topic in svc.topics.values()
+                    },
+                    "schemas": {
+                        schema.name: {
+                            "type": "avro" if schema.__class__.__name__ == "AvroSchema" else "dto",
+                            "namespace": getattr(schema, "namespace", ""),
+                            "fields": schema.fields
+                        } for schema in svc.schemas.values()
                     }
                 } for name, svc in services.services.items()
             }
