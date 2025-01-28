@@ -13,8 +13,6 @@ A tool for visualizing Kafka microservices architecture through static code anal
 ## Prerequisites
 
 - Python 3.8+
-- Graphviz
-- Node.js 14+ (for the web viewer)
 
 ## Installation
 
@@ -31,27 +29,38 @@ pip install -r requirements.txt
 
 1. Analyze your codebase:
 ```bash
-python scripts/analyze.py --source-dir /path/to/your/services
+# Basic usage
+python scripts/analyze.py /path/to/your/services
+
+# With custom output file
+python scripts/analyze.py /path/to/your/services --output custom_output.json
 ```
 
 2. Generate visualization:
 ```bash
-python scripts/visualize.py --input analysis_output.json --output architecture.html
+# Basic usage (output will be architecture.html)
+python scripts/visualize.py analysis_output.json
+
+# With custom output file
+python scripts/visualize.py analysis_output.json --output custom_viz.html
 ```
 
 3. View the results:
 ```bash
+# Start a simple HTTP server
 python -m http.server 8000
-# Open http://localhost:8000/architecture.html in your browser
+
+# Open your browser and navigate to:
+# http://localhost:8000/architecture.html
 ```
 
 ## Example Output
 
 The tool generates an interactive visualization showing:
-- Microservices (as nodes)
-- Kafka topics (as intermediary nodes)
+- Microservices (as green nodes)
+- Kafka topics (as blue nodes)
 - Producer/consumer relationships (as directed edges)
-- Avro schema relationships
+- Avro schema relationships (as purple nodes)
 
 ## How It Works
 
