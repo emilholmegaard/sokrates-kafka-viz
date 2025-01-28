@@ -45,7 +45,7 @@ class KafkaAnalyzer:
     # Directories to skip
     SKIP_DIRS = {
         'node_modules', 'venv', '.git', '.idea', 'target', 'build', 
-        'dist', '__pycache__', '.vscode', 'bin', 'obj'
+        'dist', '__pycache__', '.vscode', 'bin', 'obj', '_sokrates'
     }
 
     def __init__(self, source_dir: str):
