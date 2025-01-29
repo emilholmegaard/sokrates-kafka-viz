@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Dict
 
 from kafka_viz.models import Service, KafkaTopic
 from .base import BaseAnalyzer, KafkaPatterns
