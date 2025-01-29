@@ -35,8 +35,14 @@ class KafkaAnalyzer(BaseAnalyzer):
         Returns:
             Dict[str, KafkaTopic]: Dictionary of topics found
         """
-        for file_path in service.root_path.rglob('*.java'):
-            if file_path.is_file():
-                result = self.analyze(file_path, service)
+        # Make sure we're working with an absolute path
+        base_path = service.root_path.resolve()
+        
+        # Find all Java files
+        for file_path in base_path.rglob('*.java'):
+            # Skip test files
+            if 'test' not in file_path.name.lower():
+                # Run the base analyzer on each file
+                self.analyze(file_path, service)
                 
         return service.topics
