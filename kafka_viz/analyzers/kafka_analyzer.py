@@ -1,18 +1,52 @@
 """Kafka pattern analyzer for different programming languages."""
 import re
 from pathlib import Path
-from typing import Dict, Set, Optional, List
+from typing import Dict, Set, Optional, Tuple
 from dataclasses import dataclass, field
 
+from .base import BaseAnalyzer, KafkaPatterns
 from ..models.service import Service
 from ..models.schema import KafkaTopic
-from .spring_analyzer import SpringCloudStreamAnalyzer
 
-@dataclass
-class KafkaPatterns:
-    """Language-specific Kafka patterns."""
-    producers: Set[str] = field(default_factory=set)
-    consumers: Set[str] = field(default_factory=set)
+class KafkaAnalyzer(BaseAnalyzer):
+    """Analyzes source code for Kafka patterns."""
+
+    def __init__(self):
+        """Initialize with language-specific patterns."""
+        super().__init__()
+        self.language_patterns = {
+            'java': LanguagePatterns.JAVA,
+            'kt': LanguagePatterns.JAVA,  # Kotlin uses same patterns
+            'scala': LanguagePatterns.JAVA,  # Scala uses similar patterns
+            'py': LanguagePatterns.PYTHON,
+            'cs': LanguagePatterns.CSHARP
+        }
+
+    def can_analyze(self, file_path: Path) -> bool:
+        """Determine if a file should be analyzed."""
+        # Only analyze source code files
+        return file_path.suffix.lstrip('.') in self.language_patterns
+
+    def get_patterns(self) -> KafkaPatterns:
+        """Get patterns for the current file language."""
+        # Get language from file extension if available
+        if hasattr(self, 'current_file') and self.current_file:
+            lang = self.current_file.suffix.lstrip('.')
+            if lang in self.language_patterns:
+                return self.language_patterns[lang]
+        # Return Java patterns as default
+        return LanguagePatterns.JAVA
+
+    def _analyze_content(
+        self, 
+        content: str, 
+        file_path: Path,
+        service: Service
+    ) -> Optional[Dict[str, KafkaTopic]]:
+        """Analyze file content for Kafka patterns."""
+        # Store current file for pattern selection
+        self.current_file = file_path
+        return super()._analyze_content(content, file_path, service)
 
 class LanguagePatterns:
     """Kafka patterns for different programming languages."""
@@ -60,90 +94,3 @@ class LanguagePatterns:
             r'ConsumerBuilder\s*<[^>]*>\s*\.\s*Subscribe\s*\(\s*[\"\']([^\"\']+)'
         }
     )
-
-class KafkaAnalyzer:
-    """Analyzes source code for Kafka patterns."""
-
-    def __init__(self):
-        self.language_patterns = {
-            'java': LanguagePatterns.JAVA,
-            'kt': LanguagePatterns.JAVA,  # Kotlin uses same patterns
-            'scala': LanguagePatterns.JAVA,  # Scala uses similar patterns
-            'py': LanguagePatterns.PYTHON,
-            'cs': LanguagePatterns.CSHARP
-        }
-        self.spring_analyzer = SpringCloudStreamAnalyzer()
-
-    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
-        """Analyze all files in a service for Kafka patterns."""
-        all_topics = {}
-    
-        # First analyze with standard Kafka patterns
-        for file_path in service.source_files:
-            topics = self.analyze_file(file_path, service)
-            if topics:
-                self._merge_topics(all_topics, topics)
-        
-        # Then analyze with Spring Cloud Stream patterns
-        for file_path in service.source_files:
-            if self.spring_analyzer.can_analyze(file_path):
-                topics = self.spring_analyzer.analyze_file(file_path, service)
-                if topics:
-                    self._merge_topics(all_topics, topics)
-    
-        return all_topics
-
-    def _merge_topics(self, target: Dict[str, KafkaTopic], source: Dict[str, KafkaTopic]):
-        """Merge topics from source into target dict."""
-        for topic_name, topic in source.items():
-            if topic_name not in target:
-                target[topic_name] = topic
-            else:
-                # Merge producers and consumers
-                target[topic_name].producers.update(topic.producers)
-                target[topic_name].consumers.update(topic.consumers)
-
-    def analyze_file(
-        self, 
-        file_path: Path, 
-        service: Service
-    ) -> Optional[Dict[str, KafkaTopic]]:
-        """Analyze a single file for Kafka patterns."""
-        if not self._should_analyze_file(file_path):
-            return None
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            return None
-
-        language = file_path.suffix.lstrip('.')
-        patterns = self.language_patterns.get(language)
-        
-        if not patterns:
-            return None
-
-        topics = {}
-        
-        # Find producers
-        for pattern in patterns.producers:
-            for match in re.finditer(pattern, content):
-                topic_name = match.group(1)
-                if topic_name not in topics:
-                    topics[topic_name] = KafkaTopic(name=topic_name)
-                topics[topic_name].producers.add(service.name)
-
-        # Find consumers
-        for pattern in patterns.consumers:
-            for match in re.finditer(pattern, content):
-                topic_name = match.group(1)
-                if topic_name not in topics:
-                    topics[topic_name] = KafkaTopic(name=topic_name)
-                topics[topic_name].consumers.add(service.name)
-
-        return topics if topics else None
-
-    def _should_analyze_file(self, file_path: Path) -> bool:
-        """Determine if a file should be analyzed."""
-        return file_path.suffix.lstrip('.') in self.language_patterns
