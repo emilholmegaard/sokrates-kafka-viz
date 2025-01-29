@@ -34,13 +34,17 @@ class KafkaPatterns:
 class BaseAnalyzer:
     """Base class for Kafka topic analyzers."""
     
+    def __init__(self):
+        """Initialize the analyzer."""
+        self.patterns = None
+    
     def get_patterns(self) -> KafkaPatterns:
         """Get the patterns to use for analysis.
         
         Returns:
             KafkaPatterns: The patterns to use
         """
-        raise NotImplementedError()
+        return self.patterns
         
     def can_analyze(self, file_path: Path) -> bool:
         """Check if this analyzer can handle the given file.
@@ -72,7 +76,8 @@ class BaseAnalyzer:
         except (IOError, UnicodeDecodeError):
             return {}
             
-        return self._analyze_content(content, file_path, service)
+        topics = self._analyze_content(content, file_path, service)
+        return topics if topics else {}
         
     def _analyze_content(
         self,
