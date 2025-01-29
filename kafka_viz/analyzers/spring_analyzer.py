@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 import re
 
-from .base import BaseAnalyzer, KafkaPatterns
+from .base import BaseAnalyzer, KafkaPatterns, KafkaPatternMatch
 from ..models.service import Service
 from ..models.schema import KafkaTopic
 
@@ -89,20 +89,33 @@ class SpringCloudStreamAnalyzer(BaseAnalyzer):
         service: Service
     ) -> Optional[Dict[str, KafkaTopic]]:
         """Enhanced analysis for Spring Cloud Stream applications."""
+        # First use the base analyzer's pattern matching
         topics = super()._analyze_content(content, file_path, service)
         if not topics:
             topics = {}
 
-        # Look for function definitions that might indicate Kafka usage
+        # Additional analysis for function definitions
         function_pattern = r'@Bean\s+public\s+Function\s*<([^>]+)>\s+(\w+)'
         for match in re.finditer(function_pattern, content):
             type_info = match.group(1)
             function_name = match.group(2)
+            line_number = content.count('\n', 0, match.start()) + 1
             
             # Check if the function processes messages
             if 'Message<' in type_info or 'KStream<' in type_info:
                 # Use function name as topic name with lower confidence
                 if function_name not in topics:
                     topics[function_name] = KafkaTopic(name=function_name)
+                    
+                # Add match for debugging
+                self.matches.append(KafkaPatternMatch(
+                    topic_name=function_name,
+                    file_path=file_path,
+                    line_number=line_number,
+                    context=match.group(0),
+                    pattern_type='function',
+                    framework=self.__class__.__name__,
+                    confidence=0.7  # Lower confidence for inferred topics
+                ))
 
         return topics if topics else None
