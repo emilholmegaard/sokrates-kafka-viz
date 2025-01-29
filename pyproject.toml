@@ -1,43 +1,35 @@
-[tool.poetry]
-name = "kafka-viz"
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sokrates-kafka-viz"
 version = "0.1.0"
 description = "Tool for visualizing Kafka microservices architecture using static code analysis"
-authors = ["Emil Holmegaard <emilholmegaard@gmail.com>"]
-license = "MIT"
-readme = "README.md"
-packages = [{include = "kafka_viz"}]
+authors = [
+    {name = "Emil Holmegaard", email = "emilholmegaard@gmail.com"},
+]
+dependencies = []
 
-[tool.poetry.dependencies]
-python = "^3.8"
-typer = {extras = ["all"], version = "^0.9.0"}
-rich = "^13.0.0"
-graphviz = "^0.20.0"
-javalang = "^0.13.0"  # For Java source parsing
-requests = "^2.31.0"  # For Schema Registry
-tomli = "^2.0.0"     # For TOML parsing
-avro = "^1.11.0"     # For Avro schema validation
-networkx = "^3.0.0"  # For dependency graph analysis
-
-[tool.poetry.group.dev.dependencies]
-black = "^22.3.0"
-flake8 = "^5.0.0"
-mypy = "^1.0.0"
-pytest="*"
-pytest-cov="*"
-isort = "^5.10.0"
-responses = "^0.24.0"  # For mocking HTTP responses in tests
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-kafka-viz = "kafka_viz.cli:app"
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "flake8>=6.0.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "--cov=kafka_viz --cov-report=term-missing"
 
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
