@@ -65,6 +65,23 @@ class KafkaAnalyzer:
             'cs': LanguagePatterns.CSHARP
         }
 
+    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
+        """Analyze all files in a service for Kafka patterns."""
+        all_topics = {}
+    
+        for file_path in service.source_files:
+            topics = self.analyze_file(file_path, service)
+            if topics:
+                for topic_name, topic in topics.items():
+                    if topic_name not in all_topics:
+                        all_topics[topic_name] = topic
+                    else:
+                        # Merge producers and consumers
+                        all_topics[topic_name].producers.update(topic.producers)
+                        all_topics[topic_name].consumers.update(topic.consumers)
+    
+        return all_topics
+
     def analyze_file(
         self, 
         file_path: Path, 
