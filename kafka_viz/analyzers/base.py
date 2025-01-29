@@ -1,9 +1,19 @@
 from pathlib import Path
-from typing import Dict, Optional, Pattern, Set
+from typing import Dict, Optional, Pattern, Set, NamedTuple
 import re
 
 from ..models.service import Service
 from ..models.schema import KafkaTopic
+
+class KafkaPatternMatch(NamedTuple):
+    """Information about a matched Kafka pattern."""
+    topic_name: str
+    file_path: Path
+    line_number: int
+    context: str
+    pattern_type: str
+    framework: str
+    confidence: float = 1.0
 
 class KafkaPatterns:
     """Container for Kafka-related regex patterns."""
