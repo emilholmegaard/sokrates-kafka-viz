@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Dict
 
 from kafka_viz.models import Service, KafkaTopic
 from .base import BaseAnalyzer, KafkaPatterns
@@ -9,92 +10,39 @@ class KafkaAnalyzer(BaseAnalyzer):
 
     def __init__(self):
         super().__init__()
-        self.topic_patterns = {
-            'java': [
-                r'@KafkaListener\(\s*topics\s*=\s*["\']([^"\']+)["\']',
-                r'@SendTo\(\s*["\']([^"\']+)["\']',
-                r'new\s+KafkaTemplate<>\([^)]+\).send\(\s*["\']([^"\']+)["\']'
-            ],
-            'python': [
-                r'KafkaConsumer\([^)]*["\']([^"\']+)["\']',
-                r'KafkaProducer\(\).send\(\s*["\']([^"\']+)["\']'
-            ],
-            'javascript': [
-                r'kafka\.consumer\([^)]*["\']([^"\']+)["\']',
-                r'kafka\.producer\.send\([^)]*["\']([^"\']+)["\']'
-            ]
-        }
-
-    def can_analyze(self, service: Service) -> bool:
-        """Check if this analyzer can handle the given service.
+        self.patterns = KafkaPatterns(
+            producers={
+                # Template based patterns
+                r'kafkaTemplate\.send\s*\(\s*["\']([^"\']+)["\']',
+                # Annotation based patterns
+                r'@SendTo\s*\(\s*["\']([^"\']+)["\']'
+            },
+            consumers={
+                r'@KafkaListener\s*\(\s*topics\s*=\s*["\']([^"\']+)["\']'
+            }
+        )
         
-        Args:
-            service: Service to check
-            
-        Returns:
-            bool: True if this analyzer can handle the service
-        """
-        return service.language.lower() in self.topic_patterns
+    def can_analyze(self, file_path: Path) -> bool:
+        """Check if file is a Java source file."""
+        return file_path.suffix.lower() == '.java'
         
-    def get_patterns(self, service: Service) -> KafkaPatterns:
-        """Get the Kafka patterns to look for in this service.
-        
-        Args:
-            service: Service to analyze
-            
-        Returns:
-            KafkaPatterns: Producer and consumer patterns
-        """
-        if not self.can_analyze(service):
-            return KafkaPatterns([], [])
-            
-        patterns = self.topic_patterns.get(service.language.lower(), [])
-        producer_patterns = [p for p in patterns if any(x in p for x in ['send', 'SendTo', 'producer'])]
-        consumer_patterns = [p for p in patterns if not any(x in p for x in ['send', 'SendTo', 'producer'])]
-        
-        return KafkaPatterns(producer_patterns, consumer_patterns)
-        
-    def analyze_service(self, service: Service) -> None:
+    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
         """Analyze a service for Kafka usage.
         
         Args:
             service: Service to analyze
+            
+        Returns:
+            Dict[str, KafkaTopic]: Dictionary of topics found
         """
-        for file_path in service.root_path.rglob('*'):
-            if self._is_source_file(file_path):
-                self._analyze_file(service, file_path)
-                
-    def _is_source_file(self, file_path: Path) -> bool:
-        """Check if file is a source file we should analyze."""
-        extensions = {
-            'java': ['.java'],
-            'python': ['.py'],
-            'javascript': ['.js', '.ts']
-        }
+        # Make sure we're working with an absolute path
+        base_path = service.root_path.resolve()
         
-        if not file_path.is_file():
-            return False
-            
-        ext = file_path.suffix.lower()
-        for lang_exts in extensions.values():
-            if ext in lang_exts:
-                return True
-        return False
+        # Find all Java files
+        for file_path in base_path.rglob('*.java'):
+            # Skip test files
+            if 'test' not in file_path.name.lower():
+                # Run the base analyzer on each file
+                self.analyze(file_path, service)
                 
-    def _analyze_file(self, service: Service, file_path: Path) -> None:
-        """Analyze a single file for Kafka patterns."""
-        with open(file_path) as f:
-            content = f.read()
-            
-        patterns = self.topic_patterns.get(service.language.lower(), [])
-        for pattern in patterns:
-            for match in re.finditer(pattern, content):
-                topic_name = match.group(1)
-                if topic_name not in service.topics:
-                    service.topics[topic_name] = KafkaTopic(topic_name)
-                    
-                # Determine if producer or consumer based on pattern
-                if any(p in pattern for p in ['send', 'SendTo', 'producer']):
-                    service.topics[topic_name].producers.add(service.name)
-                else:
-                    service.topics[topic_name].consumers.add(service.name)
+        return service.topics

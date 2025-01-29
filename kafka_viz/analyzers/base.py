@@ -1,137 +1,137 @@
-"""Base classes for Kafka pattern analysis."""
-import re
-from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Set, List, Any
-from dataclasses import dataclass, field
+from typing import Dict, Optional, Pattern, Set, NamedTuple
+import re
 
 from ..models.service import Service
 from ..models.schema import KafkaTopic
 
-@dataclass
-class KafkaPatternMatch:
-    """Represents a matched Kafka pattern in code."""
+class KafkaPatternMatch(NamedTuple):
+    """Information about a matched Kafka pattern."""
     topic_name: str
     file_path: Path
     line_number: int
     context: str
-    pattern_type: str  # 'producer', 'consumer', or 'config'
-    framework: Optional[str] = None
-    confidence: float = 1.0  # How confident we are in this match (0.0-1.0)
+    pattern_type: str
+    framework: str
+    confidence: float = 1.0
 
-@dataclass
 class KafkaPatterns:
-    """Patterns for detecting Kafka usage in code."""
-    producers: Set[str] = field(default_factory=set)
-    consumers: Set[str] = field(default_factory=set)
-    topic_configs: Set[str] = field(default_factory=set)
-    ignore_patterns: Set[str] = field(default_factory=set)
-    custom_patterns: Dict[str, Set[str]] = field(default_factory=dict)
+    """Container for Kafka-related regex patterns."""
+    def __init__(
+        self,
+        producers: Set[str] = None,
+        consumers: Set[str] = None,
+        topic_configs: Set[str] = None,
+        ignore_patterns: Set[str] = None,
+        custom_patterns: Dict[str, Set[str]] = None
+    ):
+        self.producers = producers or set()
+        self.consumers = consumers or set()
+        self.topic_configs = topic_configs or set()
+        self.ignore_patterns = ignore_patterns or set()
+        self.custom_patterns = custom_patterns or {}
+        
+        # Compile patterns for efficiency
+        self._compiled_producers = {re.compile(p) for p in self.producers}
+        self._compiled_consumers = {re.compile(p) for p in self.consumers}
+        self._compiled_configs = {re.compile(p) for p in self.topic_configs}
+        self._compiled_ignore = {re.compile(p) for p in self.ignore_patterns}
+        
+    def should_ignore(self, content: str) -> bool:
+        """Check if content matches any ignore patterns."""
+        return any(p.search(content) for p in self._compiled_ignore)
 
-class BaseAnalyzer(ABC):
-    """Base class for all Kafka pattern analyzers."""
-
+class BaseAnalyzer:
+    """Base class for Kafka topic analyzers."""
+    
     def __init__(self):
-        self.debug_mode = False
-        self.matches: List[KafkaPatternMatch] = []
-
-    @abstractmethod
-    def can_analyze(self, file_path: Path) -> bool:
-        """Determine if this analyzer can handle the given file."""
-        pass
-
-    @abstractmethod
+        """Initialize the analyzer."""
+        self.patterns = None
+    
     def get_patterns(self) -> KafkaPatterns:
-        """Get the Kafka patterns for this analyzer."""
-        pass
-
-    def analyze(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
-        """Analyze a file and return discovered Kafka topics."""
+        """Get the patterns to use for analysis.
+        
+        Returns:
+            KafkaPatterns: The patterns to use
+        """
+        return self.patterns
+        
+    def can_analyze(self, file_path: Path) -> bool:
+        """Check if this analyzer can handle the given file.
+        
+        Args:
+            file_path: Path to the file to check
+            
+        Returns:
+            bool: True if this analyzer can handle the file
+        """
+        raise NotImplementedError()
+        
+    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
+        """Analyze a file for Kafka topic usage.
+        
+        Args:
+            file_path: Path to file to analyze
+            service: Service the file belongs to
+            
+        Returns:
+            Dict[str, KafkaTopic]: Dictionary of topics found
+        """
         if not self.can_analyze(file_path):
-            return None
-
+            return {}
+            
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path) as f:
                 content = f.read()
-                return self._analyze_content(content, file_path, service)
-        except Exception as e:
-            if self.debug_mode:
-                print(f"Error analyzing {file_path}: {str(e)}")
-            return None
-
+        except (IOError, UnicodeDecodeError):
+            return {}
+            
+        topics = self._analyze_content(content, file_path, service)
+        return topics if topics else {}
+        
     def _analyze_content(
-        self, 
-        content: str, 
-        file_path: Path, 
+        self,
+        content: str,
+        file_path: Path,
         service: Service
-    ) -> Optional[Dict[str, KafkaTopic]]:
-        """Analyze file content for Kafka patterns."""
+    ) -> Dict[str, KafkaTopic]:
+        """Analyze file content for Kafka topics.
+        
+        Args:
+            content: File content to analyze
+            file_path: Path to the file (for error reporting)
+            service: Service the file belongs to
+            
+        Returns:
+            Dict[str, KafkaTopic]: Dictionary of topics found
+        """
         patterns = self.get_patterns()
+        if patterns.should_ignore(content):
+            return {}
+            
         topics: Dict[str, KafkaTopic] = {}
-
-        # Check if file should be ignored
-        for ignore_pattern in patterns.ignore_patterns:
-            if re.search(ignore_pattern, content):
-                return None
-
-        # Helper function to process matches
-        def process_matches(pattern_set: Set[str], pattern_type: str):
-            for pattern in pattern_set:
-                for match in re.finditer(pattern, content):
-                    # Get line number and context
-                    line_number = content.count('\n', 0, match.start()) + 1
-                    lines = content.splitlines()
-                    context_start = max(0, line_number - 2)
-                    context_end = min(len(lines), line_number + 1)
-                    context = '\n'.join(lines[context_start:context_end])
-
-                    topic_name = match.group(1)
+        
+        # Find producer patterns
+        for pattern in patterns._compiled_producers:
+            for match in pattern.finditer(content):
+                topic_name = match.group(1)
+                if topic_name not in topics:
+                    topics[topic_name] = KafkaTopic(topic_name)
+                topics[topic_name].producers.add(service.name)
+                
+        # Find consumer patterns
+        for pattern in patterns._compiled_consumers:
+            for match in pattern.finditer(content):
+                topic_name = match.group(1)
+                if topic_name not in topics:
+                    topics[topic_name] = KafkaTopic(topic_name)
+                topics[topic_name].consumers.add(service.name)
+                
+        # Find topic configurations
+        for pattern in patterns._compiled_configs:
+            for match in pattern.finditer(content):
+                topic_name = match.group(1)
+                if topic_name not in topics:
+                    topics[topic_name] = KafkaTopic(topic_name)
                     
-                    # Store the match for debugging/analysis
-                    kafka_match = KafkaPatternMatch(
-                        topic_name=topic_name,
-                        file_path=file_path,
-                        line_number=line_number,
-                        context=context,
-                        pattern_type=pattern_type,
-                        framework=self.__class__.__name__,
-                    )
-                    self.matches.append(kafka_match)
-
-                    # Add to topics
-                    if topic_name not in topics:
-                        topics[topic_name] = KafkaTopic(name=topic_name)
-                    
-                    topic = topics[topic_name]
-                    if pattern_type == 'producer':
-                        topic.producers.add(service.name)
-                    elif pattern_type == 'consumer':
-                        topic.consumers.add(service.name)
-
-        # Process standard patterns
-        process_matches(patterns.producers, 'producer')
-        process_matches(patterns.consumers, 'consumer')
-        process_matches(patterns.topic_configs, 'config')
-
-        # Process custom patterns
-        for pattern_type, pattern_set in patterns.custom_patterns.items():
-            process_matches(pattern_set, pattern_type)
-
-        return topics if topics else None
-
-    def get_debug_info(self) -> Dict[str, Any]:
-        """Get debug information about the analysis."""
-        return {
-            'analyzer': self.__class__.__name__,
-            'matches': [
-                {
-                    'topic': m.topic_name,
-                    'file': str(m.file_path),
-                    'line': m.line_number,
-                    'type': m.pattern_type,
-                    'context': m.context,
-                    'confidence': m.confidence
-                }
-                for m in self.matches
-            ]
-        }
+        return topics

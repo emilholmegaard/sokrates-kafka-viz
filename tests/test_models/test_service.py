@@ -6,16 +6,16 @@ def test_service_creation():
     service = Service(name='test-service', path=path)
     
     assert service.name == 'test-service'
-    assert service.path == path
-    assert service.kafka_topics == {}
+    assert service.root_path == path  # Updated from path to root_path
+    assert service.topics == {}  # Updated from kafka_topics to topics
 
 def test_service_add_topic():
     service = Service(name='test-service', path=Path('/test'))
     
-    service.add_topic('test-topic', producer=True)
-    assert 'test-topic' in service.kafka_topics
+    service.add_topic('test-topic', is_producer=True)  # Updated from producer to is_producer
+    assert 'test-topic' in service.topics  # Updated from kafka_topics to topics
     
-    topic = service.kafka_topics['test-topic']
+    topic = service.topics['test-topic']  # Updated from kafka_topics to topics
     assert service.name in topic.producers
     assert service.name not in topic.consumers
 

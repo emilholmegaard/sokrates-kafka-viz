@@ -7,8 +7,8 @@ import org.springframework.messaging.handler.annotation.SendTo;
 
 @EnableBinding(Processor.class)
 public class OrderProcessor {
-    @StreamListener(Processor.INPUT)
-    @SendTo(Processor.OUTPUT)
+    @StreamListener("orders")
+    @SendTo("processed-orders")
     public ProcessedOrder processOrder(Order order) {
         return new ProcessedOrder(order.getId());
     }

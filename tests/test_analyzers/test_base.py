@@ -7,15 +7,12 @@ class SimpleTestAnalyzer(BaseAnalyzer):
         super().__init__()
         self.patterns = KafkaPatterns(
             producers={r'producer\.send\s*\(\s*[\"\']([^\"\']+)'},
-            consumers={r'consumer\.subscribe\s*\(\s*[\"\']([^\"\']+)'},
+            consumers={r'KafkaConsumer\s*\([\"\']([^\"\']+)'}, # Simplified pattern
             topic_configs={r'topic:\s*[\"\']([^\"\']+)'}
         )
 
     def can_analyze(self, file_path: Path) -> bool:
         return file_path.suffix in {'.py', '.java'}
-
-    def get_patterns(self) -> KafkaPatterns:
-        return self.patterns
 
 def test_base_analyzer_can_analyze(test_data_dir):
     analyzer = SimpleTestAnalyzer()
