@@ -5,10 +5,18 @@ A tool for visualizing Kafka microservices architecture using static code analys
 ## Features
 
 - Service discovery through static code analysis
-- Avro schema analysis and validation
+- Comprehensive schema support:
+  - Avro schemas
+  - CloudEvents
+  - Protocol Buffers
+  - JSON Schema
+  - Apache Parquet
+  - Custom formats
 - Kafka topic dependency mapping
 - Interactive visualization of service relationships
 - Configurable analysis rules
+- Robust state persistence
+- Analysis checkpointing and resume capability
 
 ## Installation
 
@@ -32,11 +40,21 @@ analyzers:
       - '**/test/**'
       - '**/mock/**'
   
-  avro:
+  schemas:
     enabled: true
-    schema_registry: http://localhost:8081
-    cache_schemas: true
-    timeout_seconds: 30
+    detectors:
+      - avro
+      - cloudevents
+      - protobuf
+      - json
+      - parquet
+    schema_registry:
+      url: http://localhost:8081
+      cache_schemas: true
+      timeout_seconds: 30
+    custom_formats:
+      - module: myapp.schemas
+        class: CustomSchemaDetector
   
   kafka:
     enabled: true
@@ -48,6 +66,12 @@ analyzers:
     broker_config:
       bootstrap_servers: 'localhost:9092'
       security_protocol: 'PLAINTEXT'
+
+state:
+  enabled: true
+  persistence_dir: ./.kafka_viz_state
+  checkpoint_interval: 300  # seconds
+  save_on_error: true
 
 output:
   format: json
@@ -78,6 +102,23 @@ Use verbose output for debugging:
 sokrates-kafka-viz analyze -v
 ```
 
+3. Managing Analysis State:
+
+List available checkpoints:
+```bash
+sokrates-kafka-viz list-checkpoints
+```
+
+Get state summary:
+```bash
+sokrates-kafka-viz state-summary
+```
+
+Resume from last checkpoint:
+```bash
+sokrates-kafka-viz analyze --resume
+```
+
 ## Analysis Output
 
 The tool generates a detailed analysis of your Kafka-based microservices architecture:
@@ -86,8 +127,55 @@ The tool generates a detailed analysis of your Kafka-based microservices archite
 - Topic producers and consumers
 - Message schema compatibility
 - Service interaction patterns
+- Schema evolution tracking
+- Analysis progress and checkpoints
 
 Results are saved in the specified output directory in the chosen format (JSON, YAML, or visualization).
+
+## Schema Support
+
+The tool supports multiple schema formats:
+
+1. Avro Schemas
+   - Standard Avro schema definitions
+   - Schema Registry integration
+   - Schema evolution tracking
+
+2. CloudEvents
+   - Standard CloudEvents format
+   - Custom CloudEvents extensions
+   - Event type validation
+
+3. Protocol Buffers
+   - .proto file parsing
+   - Message type detection
+   - Field validation
+
+4. JSON Schema
+   - Draft-07 support
+   - Schema references
+   - Custom vocabularies
+
+5. Apache Parquet
+   - Column definitions
+   - Compression options
+   - Type inference
+
+6. Custom Formats
+   - Pluggable schema detector interface
+   - Custom validation rules
+   - Format-specific options
+
+## State Persistence
+
+The tool provides robust state management:
+
+- SQLite-based state storage
+- Automatic checkpointing
+- Resume capability
+- Progress tracking
+- Emergency state saves
+- Schema caching
 
 ## Extending the Tool
 
