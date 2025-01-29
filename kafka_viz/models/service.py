@@ -14,6 +14,7 @@ class Service:
     topics: Dict[str, KafkaTopic] = field(default_factory=dict)
     schemas: Dict[str, Schema] = field(default_factory=dict)
     dependencies: Set[str] = field(default_factory=set)
+    source_files: Set[Path] = field(default_factory=set)
 
     @property
     def produced_topics(self) -> Set[str]:

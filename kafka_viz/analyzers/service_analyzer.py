@@ -48,19 +48,38 @@ class ServiceAnalyzer:
         """Detect if path contains a service by looking for build files."""
         if not path.is_dir():
             return None
-            
+        
         for language, patterns in self.build_patterns.items():
             for pattern in patterns:
                 build_file = path / pattern
                 if build_file.exists():
                     name = self._extract_service_name(build_file, language)
                     if name:
-                        return Service(
+                        # Create service
+                        service = Service(
                             name=name,
                             root_path=path,
                             language=language,
                             build_file=build_file
                         )
+                    
+                        # Collect source files based on language
+                        extensions = {
+                            'java': ['.java', '.kt', '.scala'],
+                            'javascript': ['.js', '.ts'],
+                            'python': ['.py'],
+                            'csharp': ['.cs']
+                        }
+                    
+                        # Get all source files with matching extensions
+                        for ext in extensions.get(language, []):
+                            for source_file in path.rglob(f'*{ext}'):
+                                # Skip test files
+                                if not any(test_dir in str(source_file.relative_to(path)) 
+                                         for test_dir in self.test_dirs):
+                                    service.source_files.add(source_file)
+                    
+                        return service
         return None
         
     def _extract_service_name(self, build_file: Path, language: str) -> Optional[str]:

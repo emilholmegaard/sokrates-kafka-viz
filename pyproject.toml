@@ -19,11 +19,11 @@ avro = "^1.11.0"     # For Avro schema validation
 networkx = "^3.0.0"  # For dependency graph analysis
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.0.0"
 black = "^22.3.0"
 flake8 = "^5.0.0"
 mypy = "^1.0.0"
-pytest-cov = "^4.0.0"  # Add this for coverage support
+pytest="*"
+pytest-cov="*"
 isort = "^5.10.0"
 responses = "^0.24.0"  # For mocking HTTP responses in tests
 

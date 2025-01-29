@@ -18,15 +18,22 @@ class LanguagePatterns:
     
     JAVA = KafkaPatterns(
         producers={
-            r'@KafkaProducer\s*\(\s*topics\s*=\s*[\"\']([^\"\']+)',
-            r'@SendTo\s*\(\s*[\"\']([^\"\']+)',
-            r'\.send\s*\(\s*[\"\']([^\"\']+)',
-            r'ProducerRecord\s*<[^>]*>\s*\(\s*[\"\']([^\"\']+)'
+            # Kafka Producer annotation with both single and double quotes
+            r'@KafkaProducer\s*\(\s*topics\s*=\s*["\']([^"\']+)["\']',
+            # Spring SendTo annotation
+            r'@SendTo\s*\(\s*["\']([^"\']+)["\']',
+            # Direct producer send method
+            r'\.send\s*\(\s*["\']([^"\']+)["\']',
+            # Kafka ProducerRecord constructor
+            r'ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']'
         },
         consumers={
-            r'@KafkaListener\s*\(\s*topics\s*=\s*[\"\']([^\"\']+)',
-            r'@KafkaHandler\s*\([^)]*[\"\']([^\"\']+)',
-            r'ConsumerRecord\s*<[^>]*>\s*\w+\s*[,\)]'
+            # Kafka Listener annotation
+            r'@KafkaListener\s*\(\s*topics\s*=\s*["\']([^"\']+)["\']',
+            # Kafka Handler annotation
+            r'@KafkaHandler\s*\([^)]*["\']([^"\']+)["\']',
+            # ConsumerRecord pattern with capture group for topic
+            r'ConsumerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']'
         }
     )
     
