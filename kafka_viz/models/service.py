@@ -1,23 +1,35 @@
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from .schema import KafkaTopic
 
 class Service:
     """Represents a microservice in the system."""
 
-    def __init__(self, name: str, path: Optional[Path] = None, language: str = "unknown"):
+    def __init__(
+        self, 
+        name: str, 
+        path: Optional[Path] = None,
+        root_path: Optional[Path] = None,  # Added for backward compatibility
+        language: str = "unknown",
+        build_file: Optional[Path] = None
+    ):
         """Initialize a service.
         
         Args:
             name: Name of the service
-            path: Path to the service's root directory
+            path: Path to the service's root directory (deprecated, use root_path)
+            root_path: Path to the service's root directory
             language: Primary programming language used in service
+            build_file: Path to the service's build file
         """
         self.name = name
-        self.root_path = path if path else Path(".")
+        self.root_path = root_path or path or Path(".")
         self.language = language.lower()
         self.topics: Dict[str, KafkaTopic] = {}
+        self.schemas: Dict[str, 'Schema'] = {}  # Forward reference
+        self.build_file = build_file
+        self.source_files: Set[Path] = set()
         
     def add_topic(self, topic_name: str, is_producer: bool = False, is_consumer: bool = False) -> None:
         """Add a topic to this service.
