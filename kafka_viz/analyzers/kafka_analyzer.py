@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 import logging
 
 from kafka_viz.models import Service, KafkaTopic
