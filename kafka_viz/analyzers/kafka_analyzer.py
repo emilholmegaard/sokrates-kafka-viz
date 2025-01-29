@@ -2,8 +2,9 @@ import re
 from pathlib import Path
 
 from kafka_viz.models import Service, KafkaTopic
+from .base import BaseAnalyzer, KafkaPatterns
 
-class KafkaAnalyzer:
+class KafkaAnalyzer(BaseAnalyzer):
     def __init__(self):
         self.topic_patterns = {
             'java': [
