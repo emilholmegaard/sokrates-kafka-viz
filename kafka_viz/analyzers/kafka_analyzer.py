@@ -94,7 +94,11 @@ class LanguagePatterns:
             # Property based patterns
             r'kafka\.topic\s*=\s*["\']([\w.-]+)["\']',
             r'kafka\.producer\.topic\s*=\s*["\']([\w.-]+)["\']',
-            r'spring\.kafka\.template\.default-topic\s*=\s*["\']([\w.-]+)["\']'
+            r'spring\.kafka\.template\.default-topic\s*=\s*["\']([\w.-]+)["\']',
+
+            # Spring Cloud Stream bindings
+            r'spring\.cloud\.stream\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']',
+            r'@Output\s*\(\s*["\']([\w.-]+)["\']'
         },
         consumers={
             # Spring Kafka Consumer patterns
@@ -119,7 +123,11 @@ class LanguagePatterns:
             
             # Method level patterns
             r'@StreamListener\s*\(\s*["\']([\w.-]+)["\']',
-            r'@Input\s*\(\s*["\']([\w.-]+)["\']'
+            r'@Input\s*\(\s*["\']([\w.-]+)["\']',
+
+            # Spring Cloud Stream bindings
+            r'spring\.cloud\.stream\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.cloud\.stream\.function\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']'
         }
     )
     
