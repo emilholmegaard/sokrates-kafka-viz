@@ -7,7 +7,7 @@ class SimpleTestAnalyzer(BaseAnalyzer):
         super().__init__()
         self.patterns = KafkaPatterns(
             producers={r'producer\.send\s*\(\s*[\"\']([^\"\']+)'},
-            consumers={r'KafkaConsumer\s*\(\s*[\"\']([^\"\']+)'},
+            consumers={r'KafkaConsumer\s*\([\"\']([^\"\']+)'}, # Simplified pattern
             topic_configs={r'topic:\s*[\"\']([^\"\']+)'}
         )
 
