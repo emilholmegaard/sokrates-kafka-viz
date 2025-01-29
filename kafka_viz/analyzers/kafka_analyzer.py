@@ -40,8 +40,9 @@ class KafkaAnalyzer(BaseAnalyzer):
         
         # Find all Java files
         for file_path in base_path.rglob('*.java'):
-            # Skip test files
-            if 'test' not in file_path.name.lower():
+            # Skip test files only if they are in test directories
+            if ('test' not in str(file_path.parent).lower() or 
+                'test_data' in str(file_path.parent).lower()):
                 # Run the base analyzer on each file
                 self.analyze(file_path, service)
                 
