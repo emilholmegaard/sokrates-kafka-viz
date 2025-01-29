@@ -182,8 +182,8 @@ The tool provides robust state management:
 You can create custom analyzers by implementing the `BaseAnalyzer` interface:
 
 ```python
-from sokrates_kafka_viz.core.analyzer import BaseAnalyzer
-from sokrates_kafka_viz.core.config import Config
+from kafka_viz.core.analyzer import BaseAnalyzer
+from kafka_viz.core.config import Config
 
 class CustomAnalyzer(BaseAnalyzer):
     async def analyze(self, config: Config) -> Any:
@@ -194,7 +194,7 @@ class CustomAnalyzer(BaseAnalyzer):
 Then register your analyzer with the analysis runner:
 
 ```python
-from sokrates_kafka_viz.core.runner import AnalysisRunner
+from kafka_viz.core.runner import AnalysisRunner
 
 runner = AnalysisRunner(config)
 runner.register_analyzer(CustomAnalyzer())
