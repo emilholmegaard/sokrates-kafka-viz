@@ -23,6 +23,7 @@ pytest = "^7.0.0"
 black = "^22.3.0"
 flake8 = "^5.0.0"
 mypy = "^1.0.0"
+pytest-cov = "^4.0.0"  # Add this for coverage support
 isort = "^5.10.0"
 responses = "^0.24.0"  # For mocking HTTP responses in tests
 
@@ -32,3 +33,11 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 kafka-viz = "kafka_viz.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=kafka_viz --cov-report=term-missing"
+
