@@ -21,11 +21,7 @@ class AnalyzerManager:
         all_topics = {}
 
         for analyzer in self.analyzers:
-            if isinstance(analyzer, KafkaAnalyzer):
-                topics = analyzer.analyze_file(file_path, service)
-            else:
-                topics = analyzer.analyze(file_path, service)
-
+            topics = analyzer.analyze(file_path, service)
             if topics:
                 for topic_name, topic in topics.items():
                     if topic_name not in all_topics:
