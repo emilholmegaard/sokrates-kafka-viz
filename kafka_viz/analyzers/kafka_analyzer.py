@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Dict, Optional
 
 from kafka_viz.models import Service, KafkaTopic
 from .base import BaseAnalyzer, KafkaPatterns
@@ -54,15 +55,19 @@ class KafkaAnalyzer(BaseAnalyzer):
         
         return KafkaPatterns(producer_patterns, consumer_patterns)
         
-    def analyze_service(self, service: Service) -> None:
+    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
         """Analyze a service for Kafka usage.
         
         Args:
             service: Service to analyze
+            
+        Returns:
+            Dict[str, KafkaTopic]: Dictionary of topics found in the service
         """
         for file_path in service.root_path.rglob('*'):
             if self._is_source_file(file_path):
                 self._analyze_file(service, file_path)
+        return service.topics
                 
     def _is_source_file(self, file_path: Path) -> bool:
         """Check if file is a source file we should analyze."""
@@ -83,8 +88,11 @@ class KafkaAnalyzer(BaseAnalyzer):
                 
     def _analyze_file(self, service: Service, file_path: Path) -> None:
         """Analyze a single file for Kafka patterns."""
-        with open(file_path) as f:
-            content = f.read()
+        try:
+            with open(file_path) as f:
+                content = f.read()
+        except (IOError, UnicodeDecodeError):
+            return  # Skip files we can't read
             
         patterns = self.topic_patterns.get(service.language.lower(), [])
         for pattern in patterns:

@@ -82,21 +82,25 @@ class SpringCloudStreamAnalyzer(BaseAnalyzer):
         """Get Spring Cloud Stream specific patterns."""
         return self.PATTERNS
 
-    def analyze(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
+    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
         """Main analysis method that follows the BaseAnalyzer pattern."""
-        return super().analyze(file_path, service)
+        try:
+            with open(file_path) as f:
+                content = f.read()
+        except (IOError, UnicodeDecodeError):
+            return {}  # Return empty dict for files we can't read
+            
+        return self._analyze_content(content, file_path, service) or {}
 
     def _analyze_content(
         self, 
         content: str, 
         file_path: Path,
         service: Service
-    ) -> Optional[Dict[str, KafkaTopic]]:
+    ) -> Dict[str, KafkaTopic]:
         """Enhanced analysis for Spring Cloud Stream applications."""
         # First use the base analyzer's pattern matching
-        topics = super()._analyze_content(content, file_path, service)
-        if not topics:
-            topics = {}
+        topics = super()._analyze_content(content, file_path, service) or {}
 
         # Additional analysis for function definitions
         function_pattern = r'@Bean\s+public\s+Function\s*<([^>]+)>\s+(\w+)'
@@ -122,4 +126,4 @@ class SpringCloudStreamAnalyzer(BaseAnalyzer):
                     confidence=0.7  # Lower confidence for inferred topics
                 ))
 
-        return topics if topics else None
+        return topics
