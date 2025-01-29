@@ -82,6 +82,10 @@ class SpringCloudStreamAnalyzer(BaseAnalyzer):
         """Get Spring Cloud Stream specific patterns."""
         return self.PATTERNS
 
+    def analyze(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
+        """Main analysis method that follows the BaseAnalyzer pattern."""
+        return super().analyze(file_path, service)
+
     def _analyze_content(
         self, 
         content: str, 
