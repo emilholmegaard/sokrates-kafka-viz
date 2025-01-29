@@ -1,11 +1,12 @@
 """Kafka pattern analyzer for different programming languages."""
 import re
 from pathlib import Path
-from typing import Dict, Set, Optional, Tuple
+from typing import Dict, Set, Optional, List
 from dataclasses import dataclass, field
 
 from ..models.service import Service
 from ..models.schema import KafkaTopic
+from .spring_analyzer import SpringCloudStreamAnalyzer
 
 @dataclass
 class KafkaPatterns:
@@ -71,23 +72,36 @@ class KafkaAnalyzer:
             'py': LanguagePatterns.PYTHON,
             'cs': LanguagePatterns.CSHARP
         }
+        self.spring_analyzer = SpringCloudStreamAnalyzer()
 
     def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
         """Analyze all files in a service for Kafka patterns."""
         all_topics = {}
     
+        # First analyze with standard Kafka patterns
         for file_path in service.source_files:
             topics = self.analyze_file(file_path, service)
             if topics:
-                for topic_name, topic in topics.items():
-                    if topic_name not in all_topics:
-                        all_topics[topic_name] = topic
-                    else:
-                        # Merge producers and consumers
-                        all_topics[topic_name].producers.update(topic.producers)
-                        all_topics[topic_name].consumers.update(topic.consumers)
+                self._merge_topics(all_topics, topics)
+        
+        # Then analyze with Spring Cloud Stream patterns
+        for file_path in service.source_files:
+            if self.spring_analyzer.can_analyze(file_path):
+                topics = self.spring_analyzer.analyze_file(file_path, service)
+                if topics:
+                    self._merge_topics(all_topics, topics)
     
         return all_topics
+
+    def _merge_topics(self, target: Dict[str, KafkaTopic], source: Dict[str, KafkaTopic]):
+        """Merge topics from source into target dict."""
+        for topic_name, topic in source.items():
+            if topic_name not in target:
+                target[topic_name] = topic
+            else:
+                # Merge producers and consumers
+                target[topic_name].producers.update(topic.producers)
+                target[topic_name].consumers.update(topic.consumers)
 
     def analyze_file(
         self, 
@@ -132,39 +146,4 @@ class KafkaAnalyzer:
 
     def _should_analyze_file(self, file_path: Path) -> bool:
         """Determine if a file should be analyzed."""
-        # Only analyze source code files
         return file_path.suffix.lstrip('.') in self.language_patterns
-
-class KafkaConfigAnalyzer:
-    """Analyzes Kafka configuration files."""
-
-    CONFIG_PATTERNS = {
-        'application.properties': r'kafka\.topic\.([^=]+)\s*=\s*([^\n]+)',
-        'application.yaml': r'kafka:\s+topics:\s+([^:]+):\s+([^\n]+)',
-        'application.yml': r'kafka:\s+topics:\s+([^:]+):\s+([^\n]+)'
-    }
-
-    def analyze_config(
-        self, 
-        config_file: Path,
-        service: Service
-    ) -> Optional[Dict[str, KafkaTopic]]:
-        """Analyze a configuration file for Kafka topic definitions."""
-        if config_file.name not in self.CONFIG_PATTERNS:
-            return None
-
-        try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except Exception:
-            return None
-
-        pattern = self.CONFIG_PATTERNS[config_file.name]
-        topics = {}
-
-        for match in re.finditer(pattern, content):
-            topic_name = match.group(2).strip('" \'')
-            if topic_name not in topics:
-                topics[topic_name] = KafkaTopic(name=topic_name)
-
-        return topics if topics else None
