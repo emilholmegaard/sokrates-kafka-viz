@@ -1,70 +1,55 @@
-"""Service model representing a microservice in the system."""
-from dataclasses import dataclass, field
-from typing import Dict, Set, Optional
 from pathlib import Path
-from .schema import Schema, KafkaTopic
+from typing import Dict, Optional
 
-@dataclass
+from .schema import KafkaTopic
+
 class Service:
     """Represents a microservice in the system."""
-    name: str
-    root_path: Path
-    language: str
-    build_file: Optional[Path] = None
-    topics: Dict[str, KafkaTopic] = field(default_factory=dict)
-    schemas: Dict[str, Schema] = field(default_factory=dict)
-    dependencies: Set[str] = field(default_factory=set)
-    source_files: Set[Path] = field(default_factory=set)
 
-    @property
-    def produced_topics(self) -> Set[str]:
-        """Get all topics this service produces to."""
-        return {name for name, topic in self.topics.items() 
-                if self.name in topic.producers}
-
-    @property
-    def consumed_topics(self) -> Set[str]:
-        """Get all topics this service consumes from."""
-        return {name for name, topic in self.topics.items() 
-                if self.name in topic.consumers}
-
-@dataclass
-class ServiceCollection:
-    """Collection of services with their relationships."""
-    services: Dict[str, Service] = field(default_factory=dict)
-    
-    def add_service(self, service: Service) -> None:
-        """Add a service to the collection."""
-        self.services[service.name] = service
-    
-    def get_service_dependencies(self, service_name: str) -> Set[str]:
-        """Get all services that this service depends on through Kafka."""
-        if service_name not in self.services:
-            return set()
+    def __init__(self, name: str, path: Optional[Path] = None, language: str = "unknown"):
+        """Initialize a service.
+        
+        Args:
+            name: Name of the service
+            path: Path to the service's root directory
+            language: Primary programming language used in service
+        """
+        self.name = name
+        self.root_path = path if path else Path(".")
+        self.language = language.lower()
+        self.topics: Dict[str, KafkaTopic] = {}
+        
+    def add_topic(self, topic_name: str, is_producer: bool = False, is_consumer: bool = False) -> None:
+        """Add a topic to this service.
+        
+        Args:
+            topic_name: Name of the Kafka topic
+            is_producer: Whether this service produces to the topic
+            is_consumer: Whether this service consumes from the topic
+        """
+        if topic_name not in self.topics:
+            self.topics[topic_name] = KafkaTopic(topic_name)
             
-        service = self.services[service_name]
-        dependencies = set()
+        topic = self.topics[topic_name]
+        if is_producer:
+            topic.producers.add(self.name)
+        if is_consumer:
+            topic.consumers.add(self.name)
+
+    def __eq__(self, other):
+        if not isinstance(other, Service):
+            return False
         
-        # Find services that produce to topics this service consumes from
-        for topic_name in service.consumed_topics:
-            for other_service in self.services.values():
-                if topic_name in other_service.produced_topics:
-                    dependencies.add(other_service.name)
+        return (self.name == other.name and
+                self.root_path == other.root_path and
+                self.language == other.language and
+                self.topics == other.topics)
+
+    def __hash__(self):
+        return hash(self.name)
         
-        return dependencies
-    
-    def get_service_dependents(self, service_name: str) -> Set[str]:
-        """Get all services that depend on this service through Kafka."""
-        if service_name not in self.services:
-            return set()
-            
-        service = self.services[service_name]
-        dependents = set()
+    def __str__(self):
+        return f"Service({self.name}, {self.language}, {len(self.topics)} topics)"
         
-        # Find services that consume from topics this service produces to
-        for topic_name in service.produced_topics:
-            for other_service in self.services.values():
-                if topic_name in other_service.consumed_topics:
-                    dependents.add(other_service.name)
-        
-        return dependents
+    def __repr__(self):
+        return self.__str__()

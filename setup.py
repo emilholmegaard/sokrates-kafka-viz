@@ -1,18 +1,19 @@
-"""Setup file for kafka-viz package."""
 from setuptools import setup, find_packages
 
 setup(
-    name="kafka-viz",
+    name="sokrates-kafka-viz",
     version="0.1.0",
     packages=find_packages(),
-    include_package_data=True,
-    install_requires=[
-        'typer',
-        'rich',
-    ],
-    entry_points={
-        'console_scripts': [
-            'kafka-viz=kafka_viz.cli:app',
-        ],
+    python_requires=">=3.8",
+    install_requires=[],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "mypy>=1.0.0",
+            "black>=22.0.0",
+            "isort>=5.0.0",
+            "flake8>=6.0.0",
+        ]
     },
 )

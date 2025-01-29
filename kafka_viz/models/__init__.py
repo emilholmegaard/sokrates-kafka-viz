@@ -1,13 +1,14 @@
-"""Models for representing Kafka-based architectures."""
+"""
+Data models for representing Kafka services and topics
+"""
 
-from .service import Service, ServiceCollection
-from .schema import Schema, AvroSchema, DTOSchema, KafkaTopic
+from .service import Service
+from .schema import KafkaTopic, Schema, AvroSchema, DTOSchema
 
 __all__ = [
     'Service',
-    'ServiceCollection',
+    'KafkaTopic',
     'Schema',
     'AvroSchema',
     'DTOSchema',
-    'KafkaTopic'
 ]
