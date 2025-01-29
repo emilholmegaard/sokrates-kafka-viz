@@ -70,78 +70,104 @@ class LanguagePatterns:
     
     JAVA = KafkaPatterns(
         producers={
-            # Spring Kafka Producer patterns
-            r'@KafkaProducer\s*\(\s*topics\s*=\s*["\']([\w.-]+)["\']',
-            r'@KafkaProducer\s*\(\s*topic\s*=\s*["\']([\w.-]+)["\']',
-            r'@SendTo\s*\(\s*["\']([\w.-]+)["\']',
-            r'@Topic\s*\(\s*["\']([\w.-]+)["\']',
+            # Generic producer annotations (Spring, custom frameworks)
+            r'@\w*Producer\s*\(\s*topics?\s*=\s*["\']([\w.-]+)["\']',
+            r'@\w*Producer\s*\(\s*value\s*=\s*["\']([\w.-]+)["\']',
+            r'@\w*To\s*\(\s*["\']([\w.-]+)["\']',
+            r'@\w*Topic\s*\(\s*["\']([\w.-]+)["\']',
+            r'@\w*Output\s*\(\s*["\']([\w.-]+)["\']',
             
-            # Producer method/API calls
+            # Generic producer method/API calls
             r'\.send\s*\(\s*["\']([\w.-]+)["\']',
-            r'\.send\(new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([\w.-]+)["\']',
-            r'ProducerRecord\s*<[^>]*>\s*\(\s*["\']([\w.-]+)["\']',
-            r'\.send\(\s*["\']([\w.-]+)["\']',
+            r'\.produce\s*\(\s*["\']([\w.-]+)["\']',
+            r'\.publish\s*\(\s*["\']([\w.-]+)["\']',
             
-            # Spring Kafka Template
-            r'kafkaTemplate\.send\(\s*["\']([\w.-]+)["\']',
-            r'KafkaTemplate<[^>]*>\.send\(\s*["\']([\w.-]+)["\']',
+            # Generic message record patterns
+            r'[Pp]roducer[Rr]ecord\s*[^(]*\(\s*["\']([\w.-]+)["\']',
+            r'[Mm]essage[Rr]ecord\s*[^(]*\(\s*["\']([\w.-]+)["\']',
+            r'[Kk]afka[Mm]essage\s*[^(]*\(\s*["\']([\w.-]+)["\']',
             
-            # Configuration patterns
-            r'@Bean\s*\(\s*name\s*=\s*["\']([\w.-]+)-producer["\']',
-            r'\.setTopicName\(\s*["\']([\w.-]+)["\']',
+            # Configuration and template patterns
+            r'\w*[Tt]emplate\s*[^.]*\.send\(\s*["\']([\w.-]+)["\']',
+            r'\w*[Tt]emplate\s*[^.]*\.produce\(\s*["\']([\w.-]+)["\']',
+            r'@Bean\s*\(\s*name\s*=\s*["\']([\w.-]+)[\w-]*producer["\']',
+            r'\.setTopic(?:Name)?\(\s*["\']([\w.-]+)["\']',
             r'\.forTopic\(\s*["\']([\w.-]+)["\']',
             
-            # Property based patterns
-            r'kafka\.topic\s*=\s*["\']([\w.-]+)["\']',
-            r'kafka\.producer\.topic\s*=\s*["\']([\w.-]+)["\']',
-            r'spring\.kafka\.template\.default-topic\s*=\s*["\']([\w.-]+)["\']'
+            # Property/configuration patterns (supports various naming conventions)
+            r'(?:kafka|messaging|producer|topic)\.[\w.-]*topic\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.kafka\.template\.default-topic\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.cloud\.stream\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']',
+            
+            # Programmatic configuration
+            r'\.topics?\(\s*["\']([\w.-]+)["\']',
+            r'\.setTopics?\(\s*["\']([\w.-]+)["\']'
         },
         consumers={
-            # Spring Kafka Consumer patterns
-            r'@KafkaListener\s*\(\s*topics\s*=\s*["\']([\w.-]+)["\']',
-            r'@KafkaListener\s*\(\s*topicPattern\s*=\s*["\']([\w.-]+)["\']',
-            r'@KafkaHandler\s*\([^)]*["\']([\w.-]+)["\']',
+            # Generic consumer annotations
+            r'@\w*Consumer\s*\(\s*topics?\s*=\s*["\']([\w.-]+)["\']',
+            r'@\w*Consumer\s*\(\s*value\s*=\s*["\']([\w.-]+)["\']',
+            r'@\w*Listener\s*\([^)]*["\']([\w.-]+)["\']',
+            r'@\w*Handler\s*\([^)]*["\']([\w.-]+)["\']',
+            r'@\w*Input\s*\(\s*["\']([\w.-]+)["\']',
+            r'@\w*From\s*\(\s*["\']([\w.-]+)["\']',
             
-            # Consumer API patterns
-            r'ConsumerRecord\s*<[^>]*>\s*\(\s*["\']([\w.-]+)["\']',
-            r'\.subscribe\(\s*Collections\.singletonList\(\s*["\']([\w.-]+)["\']',
-            r'\.subscribe\(\s*Arrays\.asList\([^)]*["\']([\w.-]+)["\']',
-            r'\.subscribe\(\s*["\']([\w.-]+)["\']',
+            # Generic consumer API patterns
+            r'\.subscribe\s*\(\s*[^)]*["\']([\w.-]+)["\']',
+            r'\.consume\s*\(\s*["\']([\w.-]+)["\']',
+            r'\.receive\s*\(\s*["\']([\w.-]+)["\']',
+            
+            # Generic message record patterns
+            r'[Cc]onsumer[Rr]ecord\s*[^(]*\(\s*["\']([\w.-]+)["\']',
+            r'[Mm]essage[Rr]ecord\s*[^(]*\(\s*["\']([\w.-]+)["\']',
+            r'[Kk]afka[Mm]essage\s*[^(]*\(\s*["\']([\w.-]+)["\']',
             
             # Configuration patterns
-            r'@Bean\s*\(\s*name\s*=\s*["\']([\w.-]+)-consumer["\']',
-            r'containerFactory\s*=\s*["\']([\w.-]+)KafkaListenerContainerFactory["\']',
+            r'@Bean\s*\(\s*name\s*=\s*["\']([\w.-]+)[\w-]*consumer["\']',
+            r'\w*[Cc]ontainer[Ff]actory\s*=\s*["\']([\w.-]+)["\']',
             
-            # Property based patterns
-            r'kafka\.consumer\.topic\s*=\s*["\']([\w.-]+)["\']',
-            r'spring\.kafka\.consumer\.topics\s*=\s*["\']([\w.-]+)["\']',
-            r'spring\.kafka\.consumer\.topic-pattern\s*=\s*["\']([\w.-]+)["\']',
+            # Property/configuration patterns
+            r'(?:kafka|messaging|consumer|topic)\.[\w.-]*topic[s]?\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.kafka\.consumer\.topics?\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.cloud\.stream\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']',
+            r'spring\.cloud\.stream\.function\.bindings\.[^.]+\.destination\s*=\s*["\']([\w.-]+)["\']',
             
-            # Method level patterns
-            r'@StreamListener\s*\(\s*["\']([\w.-]+)["\']',
-            r'@Input\s*\(\s*["\']([\w.-]+)["\']'
+            # Topic pattern subscriptions
+            r'topic[Pp]attern\s*=\s*["\']([\w.-]+)["\']',
+            r'group[Pp]attern\s*=\s*["\']([\w.-]+)["\']'
         }
     )
     
     PYTHON = KafkaPatterns(
         producers={
-            r'KafkaProducer\s*\([^)]*\)\.send\s*\(\s*[\"\']([\w.-]+)',
-            r'producer\.send\s*\(\s*[\"\']([\w.-]+)'
+            # Generic producer patterns
+            r'[Pp]roducer\s*\([^)]*\)\s*\.\s*(?:send|produce)\s*\(\s*[\"\']([\w.-]+)',
+            r'\.(?:send|produce)\s*\(\s*[\"\']([\w.-]+)',
+            r'topic\s*=\s*[\"\']([\w.-]+)',
+            r'TOPIC\s*=\s*[\"\']([\w.-]+)'
         },
         consumers={
-            r'KafkaConsumer\s*\([^)]*[\"\']([\w.-]+)',
-            r'consumer\.subscribe\s*\(\s*\[[\"\']([\w.-]+)'
+            # Generic consumer patterns
+            r'[Cc]onsumer\s*\([^)]*[\"\']([\w.-]+)',
+            r'\.subscribe\s*\(\s*(?:\[[\"\']([\w.-]+)|\{[\"\']([\w.-]+))',
+            r'topic\s*=\s*[\"\']([\w.-]+)',
+            r'TOPIC\s*=\s*[\"\']([\w.-]+)'
         }
     )
     
     CSHARP = KafkaPatterns(
         producers={
-            r'\.Produce\s*\(\s*[\"\']([\w.-]+)',
-            r'ProducerBuilder\s*<[^>]*>\s*\.\s*SetTopic\s*\(\s*[\"\']([\w.-]+)',
-            r'\.ProduceAsync\s*\(\s*[\"\']([\w.-]+)'
+            # Generic producer patterns
+            r'\.[Pp]roduce(?:Async)?\s*\(\s*[\"\']([\w.-]+)',
+            r'\.[Ss]end(?:Async)?\s*\(\s*[\"\']([\w.-]+)',
+            r'\.[Ss]et[Tt]opic\s*\(\s*[\"\']([\w.-]+)',
+            r'[Tt]opic\s*=\s*[\"\']([\w.-]+)'
         },
         consumers={
-            r'\.Subscribe\s*\(\s*[\"\']([\w.-]+)',
-            r'ConsumerBuilder\s*<[^>]*>\s*\.\s*Subscribe\s*\(\s*[\"\']([\w.-]+)'
+            # Generic consumer patterns
+            r'\.[Ss]ubscribe\s*\(\s*[\"\']([\w.-]+)',
+            r'\.[Cc]onsume(?:Async)?\s*\(\s*[\"\']([\w.-]+)',
+            r'\.[Ss]et[Tt]opic\s*\(\s*[\"\']([\w.-]+)',
+            r'[Tt]opic\s*=\s*[\"\']([\w.-]+)'
         }
     )
