@@ -5,7 +5,10 @@ from kafka_viz.models import Service, KafkaTopic
 from .base import BaseAnalyzer, KafkaPatterns
 
 class KafkaAnalyzer(BaseAnalyzer):
+    """Analyzer for finding Kafka usage patterns in code."""
+
     def __init__(self):
+        super().__init__()
         self.topic_patterns = {
             'java': [
                 r'@KafkaListener\(\s*topics\s*=\s*["\']([^"\']+)["\']',
@@ -21,6 +24,35 @@ class KafkaAnalyzer(BaseAnalyzer):
                 r'kafka\.producer\.send\([^)]*["\']([^"\']+)["\']'
             ]
         }
+
+    def can_analyze(self, service: Service) -> bool:
+        """Check if this analyzer can handle the given service.
+        
+        Args:
+            service: Service to check
+            
+        Returns:
+            bool: True if this analyzer can handle the service
+        """
+        return service.language.lower() in self.topic_patterns
+        
+    def get_patterns(self, service: Service) -> KafkaPatterns:
+        """Get the Kafka patterns to look for in this service.
+        
+        Args:
+            service: Service to analyze
+            
+        Returns:
+            KafkaPatterns: Producer and consumer patterns
+        """
+        if not self.can_analyze(service):
+            return KafkaPatterns([], [])
+            
+        patterns = self.topic_patterns.get(service.language.lower(), [])
+        producer_patterns = [p for p in patterns if any(x in p for x in ['send', 'SendTo', 'producer'])]
+        consumer_patterns = [p for p in patterns if not any(x in p for x in ['send', 'SendTo', 'producer'])]
+        
+        return KafkaPatterns(producer_patterns, consumer_patterns)
         
     def analyze_service(self, service: Service) -> None:
         """Analyze a service for Kafka usage.
@@ -54,7 +86,7 @@ class KafkaAnalyzer(BaseAnalyzer):
         with open(file_path) as f:
             content = f.read()
             
-        patterns = self.topic_patterns.get(service.language, [])
+        patterns = self.topic_patterns.get(service.language.lower(), [])
         for pattern in patterns:
             for match in re.finditer(pattern, content):
                 topic_name = match.group(1)
