@@ -1,6 +1,6 @@
 from pathlib import Path
 from kafka_viz.models.service import Service
-from kafka_viz.analyzers.frameworks.spring import SpringCloudStreamAnalyzer
+from kafka_viz.analyzers.spring_analyzer import SpringCloudStreamAnalyzer
 
 def test_spring_cloud_stream_analyzer(spring_service_dir):
     analyzer = SpringCloudStreamAnalyzer()
