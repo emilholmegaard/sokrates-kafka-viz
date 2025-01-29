@@ -1,53 +1,49 @@
+"""Java-specific Kafka pattern analyzer."""
 import re
 from pathlib import Path
-from typing import Dict, Set
-import logging
+from typing import Dict, Optional, Set
 
 from kafka_viz.models import Service, KafkaTopic
 from .base import BaseAnalyzer, KafkaPatterns
 
-logger = logging.getLogger(__name__)
-
-class KafkaAnalyzer(BaseAnalyzer):
-    """Analyzer for finding Kafka usage patterns in code."""
+class JavaKafkaAnalyzer(BaseAnalyzer):
+    """Analyzer for Java-specific Kafka patterns."""
 
     def __init__(self):
         super().__init__()
-        # Define regex patterns for Kafka usage
+        # Define regex patterns for Java Kafka usage
         self.patterns = KafkaPatterns(
             producers={
                 # Plain Kafka patterns
                 r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*"([^"]+)"',  # ProducerRecord constructor
-                r'\.send\s*\(\s*"([^"]+)"',  # Direct send
-                r'kafkaTemplate\.send\s*\(\s*"([^"]+)"',  # KafkaTemplate send
+                r'\.send\s*\(\s*"([^"]+)"',  # KafkaTemplate.send()
                 
-                # Spring Cloud Stream patterns
-                r'@SendTo\s*\(\s*"([^"]+)"\s*\)',  # SendTo annotation
-                r'@Output\s*\(\s*"([^"]+)"\s*\)',  # Output channel
+                # Spring patterns
+                r'@SendTo\s*\(\s*"([^"]+)"\s*\)',  # Spring Cloud Stream SendTo
+                r'@Output\s*\(\s*"([^"]+)"\s*\)',  # Spring Cloud Stream output
             },
             consumers={
                 # Plain Kafka patterns
-                r'\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*"([^"]+)"\s*\)',  # Subscribe
-                r'@KafkaListener\s*\(\s*topics\s*=\s*"([^"]+)"\s*\)',  # Single topic
-                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"\s*\}\s*\)',  # Array topics
+                r'\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*"([^"]+)"\s*\)',  # Plain consumer
+                r'@KafkaListener\s*\(\s*topics\s*=\s*"([^"]+)"\s*\)',  # Spring Kafka listener
+                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"\s*\}\s*\)',  # Array style topics
                 
-                # Spring Cloud Stream patterns
-                r'@StreamListener\s*\(\s*"([^"]+)"\s*\)',  # StreamListener
-                r'@Input\s*\(\s*"([^"]+)"\s*\)',  # Input channel
+                # Spring patterns
+                r'@StreamListener\s*\(\s*"([^"]+)"\s*\)',  # Spring Cloud Stream listener
+                r'@Input\s*\(\s*"([^"]+)"\s*\)'  # Spring Cloud Stream input
             },
             topic_configs={
-                # Configuration patterns
+                # Topic variable/constant patterns
                 r'(?:private|public|static)\s+(?:final\s+)?String\s+([A-Z_]+)\s*=\s*"([^"]+)"',  # Constants
-                r'@Value\s*\(\s*"\$\{([^}]+\.topic)\}"\s*\)\s*private\s+String\s+([^;\s]+)',  # Spring config
-                r'spring\.cloud\.stream\.bindings\.([^.]+)\.destination\s*=',  # Stream binding
-                r'@TopicConfig\s*\(\s*name\s*=\s*"([^"]+)"'  # Topic config
+                r'@Value\s*\(\s*"\$\{([^}]+\.topic)\}"\s*\)\s*private\s+String\s+([^;\s]+)',  # Spring configuration
+                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"(?:\s*,\s*"([^"]+)")*\s*\}\s*\)'  # Multi-topic declarations
             }
         )
-        
+
     def can_analyze(self, file_path: Path) -> bool:
         """Check if file is a Java source file."""
         return file_path.suffix.lower() == '.java'
-        
+
     def _extract_topic_vars(self, content: str) -> Dict[str, str]:
         """Extract topic variables and constants from file content."""
         topic_vars = {}
@@ -58,35 +54,6 @@ class KafkaAnalyzer(BaseAnalyzer):
                     var_name, topic_name = match.groups()
                     topic_vars[var_name] = topic_name
         return topic_vars
-        
-    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
-        """Analyze a service for Kafka usage.
-        
-        Args:
-            service: Service to analyze
-            
-        Returns:
-            Dict[str, KafkaTopic]: Dictionary of topics found
-        """
-        # Make sure we're working with an absolute path
-        base_path = service.root_path.resolve()
-        
-        # Find all Java files
-        java_files = list(base_path.rglob('*.java'))
-        logger.debug(f"Found {len(java_files)} Java files in {base_path}")
-        
-        for file_path in java_files:
-            # Skip actual test files but not test data files
-            if ('src/test' not in str(file_path) and 
-                'tests/test_data' in str(file_path) or
-                'src/test' not in str(file_path) and
-                'tests/test' not in str(file_path)):
-                try:
-                    self.analyze(file_path, service)
-                except Exception as e:
-                    logger.error(f"Error analyzing {file_path}: {str(e)}")
-                    
-        return service.topics
 
     def analyze(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
         """Analyze Java file for Kafka patterns.
