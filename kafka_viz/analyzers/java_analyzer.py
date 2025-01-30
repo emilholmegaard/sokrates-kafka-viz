@@ -2,12 +2,17 @@ import re
 from typing import List, Set
 from pathlib import Path
 from ..models.schema import KafkaTopic
+from .base import BaseAnalyzer
 
-class JavaAnalyzer:
+class JavaAnalyzer(BaseAnalyzer):
     def __init__(self):
         self.topics: Set[KafkaTopic] = set()
         
-    def analyze_file(self, file_path: Path) -> List[KafkaTopic]:
+    def can_analyze(self, file_path: Path) -> bool:
+        """Check if this analyzer can handle Java files."""
+        return file_path.suffix.lower() == '.java'
+
+    def analyze(self, file_path: Path, service) -> List[KafkaTopic]:
         """
         Analyze a Java file for Kafka topic patterns.
         Supports both basic patterns and advanced patterns including:
@@ -19,19 +24,14 @@ class JavaAnalyzer:
         """
         self.topics.clear()
         content = file_path.read_text()
-        service_name = self._get_service_name(file_path)
         
-        self._find_record_based_producers(content, service_name, file_path)
-        self._find_collection_based_consumers(content, service_name, file_path)
-        self._find_container_configs(content, service_name, file_path)
-        self._find_stream_patterns(content, service_name, file_path)
-        self._find_value_annotations(content, service_name, file_path)
+        self._find_record_based_producers(content, service.name, file_path)
+        self._find_collection_based_consumers(content, service.name, file_path)
+        self._find_container_configs(content, service.name, file_path)
+        self._find_stream_patterns(content, service.name, file_path)
+        self._find_value_annotations(content, service.name, file_path)
         
         return list(self.topics)
-
-    def _get_service_name(self, file_path: Path) -> str:
-        """Extract service name from file path."""
-        return file_path.parent.name
 
     def _get_or_create_topic(self, name: str) -> KafkaTopic:
         """Get existing topic or create new one."""
@@ -58,11 +58,11 @@ class JavaAnalyzer:
 
         # Match messageProducer.publish patterns
         publish_calls = re.finditer(
-            r'(?:messageProducer|producer)\.publish\s*\(\s*["\']([^"\']+)["\']',
+            r'(?:messageProducer|producer)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
             content
         )
         for match in publish_calls:
-            topic = self._get_or_create_topic(match.group(1))
+            topic = self._get_or_create_topic(match.group(2))
             topic.producers.add(service_name)
             topic.add_producer_location(service_name, {
                 'file': str(file_path),
@@ -182,22 +182,6 @@ class JavaAnalyzer:
             if target.startswith('Processor.'):
                 channel = target.split('.')[-1].lower()
                 topic = self._get_or_create_topic(channel)
-                topic.producers.add(service_name)
-                topic.add_producer_location(service_name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
-
-    def _find_value_annotations(self, content: str, service_name: str, file_path: Path):
-        # Match @Value annotations with kafka topic configurations
-        value_annotations = re.finditer(
-            r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?',
-            content
-        )
-        for match in value_annotations:
-            config = match.group(1)
-            if 'kafka' in config.lower() and 'topic' in config.lower():
-                topic = self._get_or_create_topic(f"${{{config}}}")
                 topic.producers.add(service_name)
                 topic.add_producer_location(service_name, {
                     'file': str(file_path),
