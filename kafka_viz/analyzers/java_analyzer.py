@@ -36,6 +36,7 @@ class JavaAnalyzer(BaseAnalyzer):
                 r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']'
             }
         )
+        self.constant_map = {}  # Map of variable names to values
 
     def can_analyze(self, file_path: Path) -> bool:
         """Check if this analyzer can handle Java files."""
@@ -44,8 +45,14 @@ class JavaAnalyzer(BaseAnalyzer):
     def _normalize_topic_name(self, name: str) -> str:
         """Normalize topic name to ensure consistent format for config values."""
         name = name.strip(' "\'')
-        if name.startswith('kafka.') or 'kafka.' in name:
-            return f"${{{name}}}" if not name.startswith('${') else name
+        # Check if it's a constant reference
+        if name in self.constant_map:
+            return self.constant_map[name]
+        # Handle Kafka config values
+        if name.startswith('${') and name.endswith('}'):
+            return name
+        if name.startswith('kafka.') or '.kafka.' in name:
+            return f"${{{name}}}"
         return name
 
     def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str):
@@ -67,6 +74,13 @@ class JavaAnalyzer(BaseAnalyzer):
             topic.consumers.add(service_name)
             topic.add_consumer_location(service_name, location)
 
+    def _extract_constants(self, content: str):
+        """Extract constant topic name definitions."""
+        self.constant_map.clear()
+        for match in re.finditer(r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']', content):
+            var_name, value = match.groups()
+            self.constant_map[var_name] = value
+
     def _analyze_content(self, content: str, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
         """Analyze file content for Kafka topics."""
         if self.patterns.should_ignore(content):
@@ -74,48 +88,40 @@ class JavaAnalyzer(BaseAnalyzer):
             return {}
 
         self.topics.clear()
+        self._extract_constants(content)
 
         # Process producers
         for pattern in self.patterns._compiled_producers:
-            matches = re.finditer(pattern.pattern, content, re.MULTILINE)
-            for match in matches:
+            for match in re.finditer(pattern.pattern, content, re.MULTILINE):
                 topic_name = match.group(match.lastindex or 1)
                 line = content[:match.start()].count('\n') + 1
                 self._add_topic(topic_name, True, file_path, line, service.name)
 
         # Process consumers
         for pattern in self.patterns._compiled_consumers:
-            matches = re.finditer(pattern.pattern, content, re.MULTILINE)
-            for match in matches:
+            for match in re.finditer(pattern.pattern, content, re.MULTILINE):
                 line = content[:match.start()].count('\n') + 1
                 topics_str = match.group(match.lastindex or 1)
-                # First try to find all quoted strings
-                topics = re.findall(r'["\']([^"\']+)["\']', topics_str)
-                if not topics:  # If no quoted strings found, try variable references
-                    topics = [t.strip() for t in topics_str.split(',')]
+                topics = []
+                # Handle different formats
+                if '"' in topics_str or "'" in topics_str:
+                    topics.extend(re.findall(r'["\']([^"\']+)["\']', topics_str))
+                else:
+                    # Try variable references
+                    topics.extend(t.strip() for t in topics_str.split(',') if t.strip())
                 
                 for topic_name in topics:
-                    if topic_name:
-                        self._add_topic(topic_name, False, file_path, line, service.name)
+                    self._add_topic(topic_name, False, file_path, line, service.name)
 
-        # Process configs and constants
-        constant_map = {}  # Map of variable names to values
-        for match in re.finditer(r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']', content):
-            var_name, value = match.groups()
-            constant_map[var_name] = value
-
-        # Process StreamListener and SendTo annotations more thoroughly
-        stream_patterns = [
-            (r'@StreamListener\s*\(\s*["\']([^"\']+)["\']', False),  # consumer
-            (r'@SendTo\s*\(\s*["\']([^"\']+)["\']', True),   # producer
-            (r'@Input\s*\(\s*["\']([^"\']+)["\']', False),   # consumer
-            (r'@Output\s*\(\s*["\']([^"\']+)["\']', True)    # producer
-        ]
-
-        for pattern, is_producer in stream_patterns:
-            for match in re.finditer(pattern, content):
-                topic_name = match.group(1)
+        # Process @Value annotations
+        for match in re.finditer(r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?\)', content):
+            value = match.group(1)
+            if 'kafka' in value.lower() and 'topic' in value.lower():
+                topic_name = f"${{{value}}}"
                 line = content[:match.start()].count('\n') + 1
+                # Look for nearby context to determine producer/consumer
+                context = content[max(0, match.start()-200):min(len(content), match.end()+200)]
+                is_producer = any(word in context.lower() for word in ['producer', 'send', 'publish', '@sendto'])
                 self._add_topic(topic_name, is_producer, file_path, line, service.name)
 
         # Process Processor.INPUT/OUTPUT references
@@ -129,6 +135,18 @@ class JavaAnalyzer(BaseAnalyzer):
                 topic_name = 'input' if not is_producer else 'output'
                 line = content[:match.start()].count('\n') + 1
                 self._add_topic(topic_name, is_producer, file_path, line, service.name)
+
+        # Process variable references
+        for var_name in self.constant_map:
+            # Look for variable usage with producers
+            for match in re.finditer(rf'(?:producer|template)\.(?:send|publish)\s*\(\s*{var_name}\b', content):
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(var_name, True, file_path, line, service.name)
+
+            # Look for variable usage with consumers
+            for match in re.finditer(rf'consumer\.subscribe\s*\([^)]*{var_name}\b', content):
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(var_name, False, file_path, line, service.name)
 
         # Sync with service topics
         for topic_name, topic in self.topics.items():
