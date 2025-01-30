@@ -6,7 +6,7 @@ from kafka_viz.models.service import Service
 
 @pytest.fixture
 def test_service():
-    return Service(name="test-service", type="unknown")
+    return Service(name="test-service", language="java")
 
 @pytest.fixture
 def test_data_path(test_data_dir):
@@ -23,7 +23,7 @@ def test_record_based_producers(test_data_path, test_service):
         "${kafka.topic.name}": {"producers"}
     }
     
-    for topic in topics:
+    for topic in topics.values():
         expected_sets = expected_topics[topic.name]
         if "producers" in expected_sets:
             assert len(topic.producers) > 0
@@ -37,7 +37,7 @@ def test_collection_based_consumers(test_data_path, test_service):
     assert len(topics) == 6
     for i in range(1, 7):
         found = False
-        for topic in topics:
+        for topic in topics.values():
             if topic.name == f"topic{i}":
                 assert len(topic.consumers) > 0
                 found = True
@@ -48,7 +48,7 @@ def test_container_factory_config(test_data_path, test_service):
     topics = analyzer.analyze(test_data_path / "ContainerConfig.java", test_service)
     
     assert len(topics) == 1
-    topic = next(iter(topics))
+    topic = next(iter(topics.values()))
     assert topic.name == "${kafka.topics.custom}"
     assert len(topic.consumers) > 0
 
@@ -64,7 +64,7 @@ def test_stream_processor(test_data_path, test_service):
     }
     
     assert len(topics) == len(expected_topics)
-    for topic in topics:
+    for topic in topics.values():
         expected_sets = expected_topics[topic.name]
         if "producers" in expected_sets:
             assert len(topic.producers) > 0
@@ -75,7 +75,7 @@ def test_location_tracking(test_data_path, test_service):
     analyzer = JavaAnalyzer()
     topics = analyzer.analyze(test_data_path / "RecordProducer.java", test_service)
     
-    for topic in topics:
+    for topic in topics.values():
         if topic.producers:
             for service in topic.producers:
                 locations = topic.producer_locations[service]
