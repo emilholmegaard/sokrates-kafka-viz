@@ -2,14 +2,19 @@ import pytest
 from pathlib import Path
 from kafka_viz.analyzers.java_analyzer import JavaAnalyzer
 from kafka_viz.models.schema import KafkaTopic
+from kafka_viz.models.service import Service
+
+@pytest.fixture
+def test_service():
+    return Service(name="test-service", type="unknown")
 
 @pytest.fixture
 def test_data_path(test_data_dir):
     return Path(test_data_dir) / "java" / "advanced"
 
-def test_record_based_producers(test_data_path):
+def test_record_based_producers(test_data_path, test_service):
     analyzer = JavaAnalyzer()
-    topics = analyzer.analyze_file(test_data_path / "RecordProducer.java")
+    topics = analyzer.analyze(test_data_path / "RecordProducer.java", test_service)
     
     assert len(topics) == 3
     expected_topics = {
@@ -25,9 +30,9 @@ def test_record_based_producers(test_data_path):
         if "consumers" in expected_sets:
             assert len(topic.consumers) > 0
 
-def test_collection_based_consumers(test_data_path):
+def test_collection_based_consumers(test_data_path, test_service):
     analyzer = JavaAnalyzer()
-    topics = analyzer.analyze_file(test_data_path / "CollectionConsumer.java")
+    topics = analyzer.analyze(test_data_path / "CollectionConsumer.java", test_service)
     
     assert len(topics) == 6
     for i in range(1, 7):
@@ -38,18 +43,18 @@ def test_collection_based_consumers(test_data_path):
                 found = True
         assert found, f"topic{i} not found"
 
-def test_container_factory_config(test_data_path):
+def test_container_factory_config(test_data_path, test_service):
     analyzer = JavaAnalyzer()
-    topics = analyzer.analyze_file(test_data_path / "ContainerConfig.java")
+    topics = analyzer.analyze(test_data_path / "ContainerConfig.java", test_service)
     
     assert len(topics) == 1
     topic = next(iter(topics))
     assert topic.name == "${kafka.topics.custom}"
     assert len(topic.consumers) > 0
 
-def test_stream_processor(test_data_path):
+def test_stream_processor(test_data_path, test_service):
     analyzer = JavaAnalyzer()
-    topics = analyzer.analyze_file(test_data_path / "StreamProcessor.java")
+    topics = analyzer.analyze(test_data_path / "StreamProcessor.java", test_service)
     
     expected_topics = {
         "outputChannel": {"producers"},
@@ -66,9 +71,9 @@ def test_stream_processor(test_data_path):
         if "consumers" in expected_sets:
             assert len(topic.consumers) > 0
 
-def test_location_tracking(test_data_path):
+def test_location_tracking(test_data_path, test_service):
     analyzer = JavaAnalyzer()
-    topics = analyzer.analyze_file(test_data_path / "RecordProducer.java")
+    topics = analyzer.analyze(test_data_path / "RecordProducer.java", test_service)
     
     for topic in topics:
         if topic.producers:
