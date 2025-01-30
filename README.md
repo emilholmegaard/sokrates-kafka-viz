@@ -4,19 +4,17 @@ A tool for visualizing Kafka microservices architecture using static code analys
 
 ## Features
 
+Current implemented features:
 - Service discovery through static code analysis
-- Comprehensive schema support:
-  - Avro schemas
-  - CloudEvents
-  - Protocol Buffers
-  - JSON Schema
-  - Apache Parquet
-  - Custom formats
+- Basic schema support:
+  - Avro schemas (implemented)
+  - JSON Schema (implemented)
+  - Additional formats planned (see issues #22)
 - Kafka topic dependency mapping
 - Interactive visualization of service relationships
 - Configurable analysis rules
-- Robust state persistence
-- Analysis checkpointing and resume capability
+- Basic state persistence
+- Analysis resume capability
 
 ## Installation
 
@@ -44,25 +42,19 @@ analyzers:
     enabled: true
     detectors:
       - avro
-      - cloudevents
-      - protobuf
       - json
-      - parquet
-    schema_registry:
+    schema_registry:  # Coming soon, see issue #26
       url: http://localhost:8081
       cache_schemas: true
       timeout_seconds: 30
-    custom_formats:
-      - module: myapp.schemas
-        class: CustomSchemaDetector
   
   kafka:
     enabled: true
     topics_patterns:
-      - '^app\.'
-      - '^service\.'
+      - '^app\\.'
+      - '^service\\.'
     exclude_patterns:
-      - '^_internal\.'
+      - '^_internal\\.'
     broker_config:
       bootstrap_servers: 'localhost:9092'
       security_protocol: 'PLAINTEXT'
@@ -74,7 +66,7 @@ state:
   save_on_error: true
 
 output:
-  format: json
+  format: json  # Currently only JSON is supported
   path: ./analysis_output
   include_details: true
   group_by: ['service', 'topic']
@@ -96,22 +88,11 @@ Or specify a custom config file:
 sokrates-kafka-viz analyze -c my_config.yaml
 ```
 
-Use verbose output for debugging:
-
-```bash
-sokrates-kafka-viz analyze -v
-```
-
 3. Managing Analysis State:
 
 List available checkpoints:
 ```bash
 sokrates-kafka-viz list-checkpoints
-```
-
-Get state summary:
-```bash
-sokrates-kafka-viz state-summary
 ```
 
 Resume from last checkpoint:
@@ -125,57 +106,46 @@ The tool generates a detailed analysis of your Kafka-based microservices archite
 
 - Service dependencies
 - Topic producers and consumers
-- Message schema compatibility
+- Message schema compatibility (for supported formats)
 - Service interaction patterns
-- Schema evolution tracking
 - Analysis progress and checkpoints
 
-Results are saved in the specified output directory in the chosen format (JSON, YAML, or visualization).
+Results are saved in the specified output directory in JSON format.
 
 ## Schema Support
 
-The tool supports multiple schema formats:
+The tool currently supports:
 
 1. Avro Schemas
    - Standard Avro schema definitions
-   - Schema Registry integration
-   - Schema evolution tracking
+   - Local file parsing
+   - Basic schema validation
 
-2. CloudEvents
-   - Standard CloudEvents format
-   - Custom CloudEvents extensions
-   - Event type validation
-
-3. Protocol Buffers
-   - .proto file parsing
-   - Message type detection
-   - Field validation
-
-4. JSON Schema
+2. JSON Schema
    - Draft-07 support
    - Schema references
-   - Custom vocabularies
+   - Basic validation
 
-5. Apache Parquet
-   - Column definitions
-   - Compression options
-   - Type inference
-
-6. Custom Formats
-   - Pluggable schema detector interface
-   - Custom validation rules
-   - Format-specific options
+Additional schema support is planned (see issue #22) for:
+- Protocol Buffers
+- CloudEvents
+- Apache Parquet
+- Custom formats
 
 ## State Persistence
 
-The tool provides robust state management:
-
-- SQLite-based state storage
-- Automatic checkpointing
-- Resume capability
+The tool provides basic state management:
+- File-based state storage
+- Checkpoint/resume capability
 - Progress tracking
-- Emergency state saves
-- Schema caching
+- Emergency state saves on errors
+
+## Language Support
+
+Current language analyzer support:
+- Java (basic implementation)
+- Python (planned, see issue #15)
+- TypeScript/JavaScript (planned, see issue #16)
 
 ## Extending the Tool
 
@@ -203,6 +173,10 @@ runner.register_analyzer(CustomAnalyzer())
 ## Contributing
 
 Contributions are welcome! Please check out our [Contributing Guide](CONTRIBUTING.md) for guidelines.
+
+## Development Status
+
+For current development status and planned features, see our [Development Roadmap](https://github.com/emilholmegaard/sokrates-kafka-viz/issues/51).
 
 ## License
 
