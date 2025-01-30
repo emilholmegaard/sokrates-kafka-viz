@@ -12,6 +12,9 @@ authors = [
 ]
 dynamic = ["dependencies"]
 
+[project.scripts]
+kafka-viz = "kafka_viz.cli:app"
+
 [tool.setuptools]
 packages = ["kafka_viz"]
 
