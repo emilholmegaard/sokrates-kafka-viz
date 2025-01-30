@@ -1,12 +1,12 @@
 """Tests for the Java-specific Kafka analyzer."""
 import pytest
 from pathlib import Path
-from kafka_viz.analyzers.java_analyzer import JavaKafkaAnalyzer
-from kafka_viz.models import Service, KafkaTopic
+from kafka_viz.analyzers.java_analyzer import JavaAnalyzer
+from kafka_viz.models import Service
 
 @pytest.fixture
 def analyzer():
-    return JavaKafkaAnalyzer()
+    return JavaAnalyzer()
 
 @pytest.fixture
 def test_service():

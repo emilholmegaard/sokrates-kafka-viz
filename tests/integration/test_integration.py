@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
-from sokrates_kafka_viz.kafka_analyzer import KafkaAnalyzer
-from sokrates_kafka_viz.models import TopicType
+from kafka_viz.kafka_analyzer import KafkaAnalyzer
+from kafka_viz.models import TopicType
 
 @pytest.fixture
 def test_project_path(test_data_dir):
