@@ -19,20 +19,20 @@ class JavaAnalyzer(BaseAnalyzer):
             producers={
                 r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']',
                 r'(?:messageProducer|producer|kafkaTemplate|template)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
-                r'@SendTo\s*\(\s*["\']([^"\']+)["\']',
-                r'@Output\s*\(\s*["\']([^"\']+)["\']'
+                r'@SendTo\s*\(["\']([^"\']+)["\']',
+                r'@Output\s*\(["\']([^"\']+)["\']'
             },
             consumers={
                 r'@KafkaListener\s*\(\s*topics\s*=\s*["\']([^"\']+)["\']',
                 r'@KafkaListener\s*\(\s*topics\s*=\s*\{([^}]+)\}',
-                r'@StreamListener\s*\(\s*["\']([^"\']+)["\']',
-                r'@Input\s*\(\s*["\']([^"\']+)["\']',
+                r'@StreamListener\s*\(["\']([^"\']+)["\']',
+                r'@Input\s*\(["\']([^"\']+)["\']',
                 r'consumer\.subscribe\s*\(\s*Arrays\.asList\s*\((.*?)\)',
                 r'consumer\.subscribe\s*\(\s*List\.of\s*\((.*?)\)',
                 r'consumer\.subscribe\s*\(\s*Set\.of\s*\((.*?)\)'
             },
             topic_configs={
-                r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?',
+                r'@Value\s*\(["\']?\$\{([^}]+)\}["\']?\)',
                 r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']'
             }
         )
@@ -41,38 +41,53 @@ class JavaAnalyzer(BaseAnalyzer):
         """Check if this analyzer can handle Java files."""
         return file_path.suffix.lower() == '.java'
 
+    def _normalize_topic_name(self, name: str) -> str:
+        """Normalize topic name to ensure consistent format for config values."""
+        name = name.strip(' "\'')
+        if name.startswith('kafka.') or 'kafka.' in name:
+            return f"${{{name}}}" if not name.startswith('${') else name
+        return name
+
+    def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str):
+        """Add a topic with proper name normalization and location tracking."""
+        name = self._normalize_topic_name(name)
+        if name not in self.topics:
+            self.topics[name] = KafkaTopic(name)
+
+        topic = self.topics[name]
+        location = {
+            'file': str(file_path),
+            'line': line
+        }
+
+        if is_producer:
+            topic.producers.add(service_name)
+            topic.add_producer_location(service_name, location)
+        else:
+            topic.consumers.add(service_name)
+            topic.add_consumer_location(service_name, location)
+
     def _analyze_content(self, content: str, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
-        """
-        Analyze file content for Kafka topics.
-        Overrides base method to handle Java-specific patterns.
-        """
+        """Analyze file content for Kafka topics."""
         if self.patterns.should_ignore(content):
             logger.debug(f"Ignoring {file_path} - matches ignore pattern")
             return {}
 
-        # Clear topics for this analysis
         self.topics.clear()
 
-        # Process producer patterns
+        # Process producers
         for pattern in self.patterns._compiled_producers:
             matches = re.finditer(pattern.pattern, content, re.MULTILINE)
             for match in matches:
-                # Get matched topic name from last group if multiple groups
-                topic_name = match.group(match.lastindex or 1).strip(' "\'"')
-                if not topic_name:
-                    continue
-                if topic_name not in self.topics:
-                    self.topics[topic_name] = KafkaTopic(topic_name)
-                self.topics[topic_name].producers.add(service.name)
-                self.topics[topic_name].add_producer_location(service.name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
+                topic_name = match.group(match.lastindex or 1)
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(topic_name, True, file_path, line, service.name)
 
-        # Process consumer patterns
+        # Process consumers
         for pattern in self.patterns._compiled_consumers:
             matches = re.finditer(pattern.pattern, content, re.MULTILINE)
             for match in matches:
+                line = content[:match.start()].count('\n') + 1
                 topics_str = match.group(match.lastindex or 1)
                 # First try to find all quoted strings
                 topics = re.findall(r'["\']([^"\']+)["\']', topics_str)
@@ -80,82 +95,55 @@ class JavaAnalyzer(BaseAnalyzer):
                     topics = [t.strip() for t in topics_str.split(',')]
                 
                 for topic_name in topics:
-                    topic_name = topic_name.strip(' "\'"')
-                    if not topic_name:
-                        continue
-                    if topic_name not in self.topics:
-                        self.topics[topic_name] = KafkaTopic(topic_name)
-                    self.topics[topic_name].consumers.add(service.name)
-                    self.topics[topic_name].add_consumer_location(service.name, {
-                        'file': str(file_path),
-                        'line': content[:match.start()].count('\n') + 1
-                    })
+                    if topic_name:
+                        self._add_topic(topic_name, False, file_path, line, service.name)
 
-        # Process constant/config patterns
-        for pattern in self.patterns._compiled_configs:
-            matches = re.finditer(pattern.pattern, content, re.MULTILINE)
-            for match in matches:
-                groups = match.groups()
-                if len(groups) == 2:  # Variable declaration
-                    var_name, value = groups
-                else:  # Config value
-                    value = groups[0]
-                    
-                if ('kafka' in value.lower() and 'topic' in value.lower()):
-                    if not value.startswith('${'):
-                        value = f"${{{value}}}" if not value.startswith('kafka') else value
-                    if value not in self.topics:
-                        self.topics[value] = KafkaTopic(value)
-                    # Look for nearby producer/consumer patterns
-                    context = content[max(0, match.start()-200):min(len(content), match.end()+200)]
-                    if any(word in context.lower() for word in ['producer', 'send', 'publish', '@sendto']):
-                        self.topics[value].producers.add(service.name)
-                    if any(word in context.lower() for word in ['consumer', 'subscribe', 'listen', '@kafkalistener']):
-                        self.topics[value].consumers.add(service.name)
-
-        # Handle variable references
-        topic_refs = {}
+        # Process configs and constants
+        constant_map = {}  # Map of variable names to values
         for match in re.finditer(r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']', content):
-            var_name, topic_name = match.groups()
-            topic_refs[var_name] = topic_name
+            var_name, value = match.groups()
+            constant_map[var_name] = value
 
-        for var_name, topic_name in topic_refs.items():
-            # Look for variable usage with producers
-            for match in re.finditer(rf'(?:producer|template)\.(?:send|publish)\s*\(\s*{var_name}\b', content):
-                if topic_name not in self.topics:
-                    self.topics[topic_name] = KafkaTopic(topic_name)
-                self.topics[topic_name].producers.add(service.name)
-                self.topics[topic_name].add_producer_location(service.name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
+        # Process StreamListener and SendTo annotations more thoroughly
+        stream_patterns = [
+            (r'@StreamListener\s*\(\s*["\']([^"\']+)["\']', False),  # consumer
+            (r'@SendTo\s*\(\s*["\']([^"\']+)["\']', True),   # producer
+            (r'@Input\s*\(\s*["\']([^"\']+)["\']', False),   # consumer
+            (r'@Output\s*\(\s*["\']([^"\']+)["\']', True)    # producer
+        ]
 
-            # Look for variable usage with consumers
-            for match in re.finditer(rf'consumer\.subscribe\s*\([^)]*{var_name}\b', content):
-                if topic_name not in self.topics:
-                    self.topics[topic_name] = KafkaTopic(topic_name)
-                self.topics[topic_name].consumers.add(service.name)
-                self.topics[topic_name].add_consumer_location(service.name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
+        for pattern, is_producer in stream_patterns:
+            for match in re.finditer(pattern, content):
+                topic_name = match.group(1)
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(topic_name, is_producer, file_path, line, service.name)
+
+        # Process Processor.INPUT/OUTPUT references
+        processor_patterns = [
+            (r'Processor\.INPUT\b', False),  # consumer
+            (r'Processor\.OUTPUT\b', True)   # producer
+        ]
+
+        for pattern, is_producer in processor_patterns:
+            for match in re.finditer(pattern, content):
+                topic_name = 'input' if not is_producer else 'output'
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(topic_name, is_producer, file_path, line, service.name)
 
         # Sync with service topics
         for topic_name, topic in self.topics.items():
             if topic_name not in service.topics:
                 service.topics[topic_name] = topic
             else:
-                service.topics[topic_name].producers.update(topic.producers)
-                service.topics[topic_name].consumers.update(topic.consumers)
-                # Ensure locations are properly updated
-                for producer in topic.producers:
-                    if producer in topic.producer_locations:
-                        for location in topic.producer_locations[producer]:
-                            service.topics[topic_name].add_producer_location(producer, location)
-                for consumer in topic.consumers:
-                    if consumer in topic.consumer_locations:
-                        for location in topic.consumer_locations[consumer]:
-                            service.topics[topic_name].add_consumer_location(consumer, location)
+                existing = service.topics[topic_name]
+                existing.producers.update(topic.producers)
+                existing.consumers.update(topic.consumers)
+                for producer in topic.producer_locations:
+                    for location in topic.producer_locations[producer]:
+                        existing.add_producer_location(producer, location)
+                for consumer in topic.consumer_locations:
+                    for location in topic.consumer_locations[consumer]:
+                        existing.add_consumer_location(consumer, location)
 
         return self.topics
 
