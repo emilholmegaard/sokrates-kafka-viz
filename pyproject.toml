@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sokrates-kafka-viz"
+name = "kafka-viz"
 version = "0.1.0"
 description = "Tool for visualizing Kafka microservices architecture using static code analysis"
 requires-python = ">=3.8"
