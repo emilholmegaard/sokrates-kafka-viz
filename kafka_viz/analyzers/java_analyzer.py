@@ -1,189 +1,113 @@
 import re
-from typing import List, Set
+from typing import Dict, Set, Optional
 from pathlib import Path
+import logging
+
 from ..models.schema import KafkaTopic
-from .base import BaseAnalyzer
+from ..models.service import Service
+from .base import BaseAnalyzer, KafkaPatterns
+
+logger = logging.getLogger(__name__)
 
 class JavaAnalyzer(BaseAnalyzer):
+    """Analyzer for Java source files containing Kafka patterns."""
+    
     def __init__(self):
-        self.topics: Set[KafkaTopic] = set()
-        
+        super().__init__()
+        self.topics: Dict[str, KafkaTopic] = {}
+        self.patterns = KafkaPatterns(
+            producers={
+                r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']',
+                r'(?:messageProducer|producer)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
+                r'(?:kafkaTemplate|template)\.send\s*\(\s*([^,\)]+)',
+                r'@SendTo\s*\(\s*["\']([^"\']+)["\']',
+                r'@Output\s*\(\s*["\']([^"\']+)["\']'
+            },
+            consumers={
+                r'consumer\.subscribe\s*\(\s*Arrays\.asList\s*\((.*?)\)',
+                r'consumer\.subscribe\s*\(\s*Set\.of\s*\((.*?)\)',
+                r'@KafkaListener\s*\(\s*(?:[^)]*?topics\s*=\s*)\{([^}]+)\}',
+                r'@Input\s*\(\s*["\']([^"\']+)["\']',
+                r'@StreamListener\s*\(\s*["\']([^"\']+)["\']'
+            },
+            topic_configs={
+                r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?'
+            }
+        )
+
     def can_analyze(self, file_path: Path) -> bool:
         """Check if this analyzer can handle Java files."""
         return file_path.suffix.lower() == '.java'
 
-    def analyze(self, file_path: Path, service) -> List[KafkaTopic]:
+    def _analyze_content(self, content: str, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
         """
-        Analyze a Java file for Kafka topic patterns.
-        Supports both basic patterns and advanced patterns including:
-        - Record-based producers
-        - Configuration-based topics
-        - Collection-based subscriptions
-        - Container factory configs
-        - Spring Cloud Stream patterns
+        Analyze file content for Kafka topics.
+        Overrides base method to handle Java-specific patterns.
         """
-        self.topics.clear()
-        content = file_path.read_text()
-        
-        self._find_record_based_producers(content, service.name, file_path)
-        self._find_collection_based_consumers(content, service.name, file_path)
-        self._find_container_configs(content, service.name, file_path)
-        self._find_stream_patterns(content, service.name, file_path)
-        self._find_value_annotations(content, service.name, file_path)
-        
-        return list(self.topics)
+        if self.patterns.should_ignore(content):
+            logger.debug(f"Ignoring {file_path} - matches ignore pattern")
+            return {}
 
-    def _get_or_create_topic(self, name: str) -> KafkaTopic:
-        """Get existing topic or create new one."""
-        for topic in self.topics:
-            if topic.name == name:
-                return topic
-        topic = KafkaTopic(name=name)
-        self.topics.add(topic)
-        return topic
-
-    def _find_record_based_producers(self, content: str, service_name: str, file_path: Path):
-        # Match ProducerRecord constructor patterns
-        producer_records = re.finditer(
-            r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']',
-            content
-        )
-        for match in producer_records:
-            topic = self._get_or_create_topic(match.group(1))
-            topic.producers.add(service_name)
-            topic.add_producer_location(service_name, {
-                'file': str(file_path),
-                'line': content[:match.start()].count('\n') + 1
-            })
-
-        # Match messageProducer.publish patterns
-        publish_calls = re.finditer(
-            r'(?:messageProducer|producer)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
-            content
-        )
-        for match in publish_calls:
-            topic = self._get_or_create_topic(match.group(2))
-            topic.producers.add(service_name)
-            topic.add_producer_location(service_name, {
-                'file': str(file_path),
-                'line': content[:match.start()].count('\n') + 1
-            })
-
-        # Match kafkaTemplate.send patterns
-        template_sends = re.finditer(
-            r'(?:kafkaTemplate|template)\.send\s*\(\s*([^,\)]+)',
-            content
-        )
-        for match in template_sends:
-            topic_name = match.group(1).strip()
-            if topic_name.startswith(('configuredTopic', '${', 'kafka.')):
-                topic = self._get_or_create_topic(topic_name)
-                topic.producers.add(service_name)
-                topic.add_producer_location(service_name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
-
-    def _find_collection_based_consumers(self, content: str, service_name: str, file_path: Path):
-        # Match Arrays.asList and Set.of patterns
-        collection_patterns = [
-            r'Arrays\.asList\s*\((.*?)\)',
-            r'Set\.of\s*\((.*?)\)',
-            r'List\.of\s*\((.*?)\)'
-        ]
-        
-        for pattern in collection_patterns:
-            collections = re.finditer(pattern, content)
-            for match in collections:
-                topics_str = match.group(1)
-                topics = re.findall(r'["\']([^"\']+)["\']', topics_str)
+        # Process producer patterns
+        for pattern in self.patterns._compiled_producers:
+            for match in pattern.finditer(content):
+                # Get matched topic name(s)
+                if ',' in match.group(1):  # Handle comma-separated topics
+                    topics = [t.strip(' "\'') for t in match.group(1).split(',')]
+                else:
+                    topics = [match.group(1).strip(' "\'')]
+                
                 for topic_name in topics:
-                    topic = self._get_or_create_topic(topic_name)
-                    topic.consumers.add(service_name)
-                    topic.add_consumer_location(service_name, {
+                    if not topic_name:
+                        continue
+                    if topic_name not in self.topics:
+                        self.topics[topic_name] = KafkaTopic(topic_name)
+                    self.topics[topic_name].producers.add(service.name)
+                    self.topics[topic_name].add_producer_location(service.name, {
                         'file': str(file_path),
                         'line': content[:match.start()].count('\n') + 1
                     })
 
-        # Match @KafkaListener with multiple topics
-        kafka_listeners = re.finditer(
-            r'@KafkaListener\s*\(\s*(?:[^)]*?topics\s*=\s*)\{([^}]+)\}',
-            content
-        )
-        for match in kafka_listeners:
-            topics_str = match.group(1)
-            # Match both string literals and ${} expressions
-            topics = re.findall(r'["\']([^"\']+)["\']|\$\{([^}]+)\}', topics_str)
-            for topic_groups in topics:
-                topic_name = next(t for t in topic_groups if t)  # Get non-empty group
-                topic = self._get_or_create_topic(topic_name)
-                topic.consumers.add(service_name)
-                topic.add_consumer_location(service_name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
+        # Process consumer patterns
+        for pattern in self.patterns._compiled_consumers:
+            for match in pattern.finditer(content):
+                topics_str = match.group(1)
+                # Handle different topic list formats
+                topics = []
+                if '"' in topics_str or "'" in topics_str:
+                    topics.extend(re.findall(r'["\']([^"\']+)["\']', topics_str))
+                elif '${' in topics_str:
+                    topics.extend(re.findall(r'\$\{([^}]+)\}', topics_str))
+                
+                for topic_name in topics:
+                    if topic_name not in self.topics:
+                        self.topics[topic_name] = KafkaTopic(topic_name)
+                    self.topics[topic_name].consumers.add(service.name)
+                    self.topics[topic_name].add_consumer_location(service.name, {
+                        'file': str(file_path),
+                        'line': content[:match.start()].count('\n') + 1
+                    })
 
-    def _find_container_configs(self, content: str, service_name: str, file_path: Path):
-        # Match containerFactory patterns with @KafkaListener
-        factory_configs = re.finditer(
-            r'@KafkaListener\s*\(\s*(?:[^)]*?topics\s*=\s*["\']?\$\{([^}]+)\}["\']?)',
-            content
-        )
-        for match in factory_configs:
-            topic_name = f"${{{match.group(1)}}}"
-            topic = self._get_or_create_topic(topic_name)
-            topic.consumers.add(service_name)
-            topic.add_consumer_location(service_name, {
-                'file': str(file_path),
-                'line': content[:match.start()].count('\n') + 1
-            })
+        # Process config patterns
+        for pattern in self.patterns._compiled_configs:
+            for match in pattern.finditer(content):
+                config = match.group(1)
+                if 'kafka' in config.lower() and 'topic' in config.lower():
+                    topic_name = f"${{{config}}}"
+                    if topic_name not in self.topics:
+                        self.topics[topic_name] = KafkaTopic(topic_name)
+                    self.topics[topic_name].add_producer_location(service.name, {
+                        'file': str(file_path),
+                        'line': content[:match.start()].count('\n') + 1
+                    })
 
-    def _find_stream_patterns(self, content: str, service_name: str, file_path: Path):
-        # Match @Output channel definitions
-        outputs = re.finditer(r'@Output\s*\(\s*["\']([^"\']+)["\']', content)
-        for match in outputs:
-            topic = self._get_or_create_topic(match.group(1))
-            topic.producers.add(service_name)
-            topic.add_producer_location(service_name, {
-                'file': str(file_path),
-                'line': content[:match.start()].count('\n') + 1
-            })
+        # Add topics to service
+        for topic_name, topic in self.topics.items():
+            if topic_name not in service.topics:
+                service.topics[topic_name] = topic
+            else:
+                # Merge producers and consumers
+                service.topics[topic_name].producers.update(topic.producers)
+                service.topics[topic_name].consumers.update(topic.consumers)
 
-        # Match @Input channel definitions
-        inputs = re.finditer(r'@Input\s*\(\s*["\']([^"\']+)["\']', content)
-        for match in inputs:
-            topic = self._get_or_create_topic(match.group(1))
-            topic.consumers.add(service_name)
-            topic.add_consumer_location(service_name, {
-                'file': str(file_path),
-                'line': content[:match.start()].count('\n') + 1
-            })
-
-        # Match StreamListener patterns
-        stream_listeners = re.finditer(
-            r'@StreamListener\s*\(\s*(?:target\s*=\s*)?([^,\)]+)',
-            content
-        )
-        for match in stream_listeners:
-            target = match.group(1).strip()
-            if target.startswith('Processor.'):
-                channel = target.split('.')[-1].lower()
-                topic = self._get_or_create_topic(channel)
-                topic.consumers.add(service_name)
-                topic.add_consumer_location(service_name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
-
-        # Match SendTo patterns
-        send_to = re.finditer(r'@SendTo\s*\(\s*([^,\)]+)', content)
-        for match in send_to:
-            target = match.group(1).strip()
-            if target.startswith('Processor.'):
-                channel = target.split('.')[-1].lower()
-                topic = self._get_or_create_topic(channel)
-                topic.producers.add(service_name)
-                topic.add_producer_location(service_name, {
-                    'file': str(file_path),
-                    'line': content[:match.start()].count('\n') + 1
-                })
+        return self.topics
