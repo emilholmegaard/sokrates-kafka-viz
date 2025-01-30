@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
-from sokrates_kafka_viz.analyzers.java_analyzer import JavaAnalyzer
-from sokrates_kafka_viz.models import KafkaTopic, TopicType
+from kafka_viz.analyzers.java_analyzer import JavaAnalyzer
+from kafka_viz.models.schema import KafkaTopic
 
 @pytest.fixture
 def test_data_path(test_data_dir):
@@ -12,35 +12,76 @@ def test_record_based_producers(test_data_path):
     topics = analyzer.analyze_file(test_data_path / "RecordProducer.java")
     
     assert len(topics) == 3
-    assert any(t.name == "record-topic" and t.type == TopicType.PRODUCER for t in topics)
-    assert any(t.name == "publish-topic" and t.type == TopicType.PRODUCER for t in topics)
-    assert any(t.name == "${kafka.topic.name}" and t.type == TopicType.PRODUCER for t in topics)
+    expected_topics = {
+        "record-topic": {"producers"},
+        "publish-topic": {"producers"},
+        "${kafka.topic.name}": {"producers"}
+    }
+    
+    for topic in topics:
+        expected_sets = expected_topics[topic.name]
+        if "producers" in expected_sets:
+            assert len(topic.producers) > 0
+        if "consumers" in expected_sets:
+            assert len(topic.consumers) > 0
 
 def test_collection_based_consumers(test_data_path):
     analyzer = JavaAnalyzer()
     topics = analyzer.analyze_file(test_data_path / "CollectionConsumer.java")
     
     assert len(topics) == 6
-    for i in range(1, 3):
-        assert any(t.name == f"topic{i}" and t.type == TopicType.CONSUMER for t in topics)
-    for i in range(3, 5):
-        assert any(t.name == f"topic{i}" and t.type == TopicType.CONSUMER for t in topics)
-    for i in range(5, 7):
-        assert any(t.name == f"topic{i}" and t.type == TopicType.CONSUMER for t in topics)
+    for i in range(1, 7):
+        found = False
+        for topic in topics:
+            if topic.name == f"topic{i}":
+                assert len(topic.consumers) > 0
+                found = True
+        assert found, f"topic{i} not found"
 
 def test_container_factory_config(test_data_path):
     analyzer = JavaAnalyzer()
     topics = analyzer.analyze_file(test_data_path / "ContainerConfig.java")
     
     assert len(topics) == 1
-    assert any(t.name == "${kafka.topics.custom}" and t.type == TopicType.CONSUMER for t in topics)
+    topic = next(iter(topics))
+    assert topic.name == "${kafka.topics.custom}"
+    assert len(topic.consumers) > 0
 
 def test_stream_processor(test_data_path):
     analyzer = JavaAnalyzer()
     topics = analyzer.analyze_file(test_data_path / "StreamProcessor.java")
     
-    assert len(topics) == 4
-    assert any(t.name == "outputChannel" and t.type == TopicType.PRODUCER for t in topics)
-    assert any(t.name == "inputChannel" and t.type == TopicType.CONSUMER for t in topics)
-    assert any(t.name == "input" and t.type == TopicType.CONSUMER for t in topics)
-    assert any(t.name == "output" and t.type == TopicType.PRODUCER for t in topics)
+    expected_topics = {
+        "outputChannel": {"producers"},
+        "inputChannel": {"consumers"},
+        "input": {"consumers"},
+        "output": {"producers"}
+    }
+    
+    assert len(topics) == len(expected_topics)
+    for topic in topics:
+        expected_sets = expected_topics[topic.name]
+        if "producers" in expected_sets:
+            assert len(topic.producers) > 0
+        if "consumers" in expected_sets:
+            assert len(topic.consumers) > 0
+
+def test_location_tracking(test_data_path):
+    analyzer = JavaAnalyzer()
+    topics = analyzer.analyze_file(test_data_path / "RecordProducer.java")
+    
+    for topic in topics:
+        if topic.producers:
+            for service in topic.producers:
+                locations = topic.producer_locations[service]
+                assert len(locations) > 0
+                for location in locations:
+                    assert "file" in location
+                    assert "line" in location
+        if topic.consumers:
+            for service in topic.consumers:
+                locations = topic.consumer_locations[service]
+                assert len(locations) > 0
+                for location in locations:
+                    assert "file" in location
+                    assert "line" in location
