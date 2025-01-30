@@ -1,6 +1,6 @@
 """Schema models for data contracts."""
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, List
 from pathlib import Path
 
 @dataclass
@@ -9,6 +9,20 @@ class KafkaTopic:
     name: str
     producers: Set[str] = field(default_factory=set)
     consumers: Set[str] = field(default_factory=set)
+    producer_locations: Dict[str, List[Dict[str, str]]] = field(default_factory=dict)
+    consumer_locations: Dict[str, List[Dict[str, str]]] = field(default_factory=dict)
+
+    def add_producer_location(self, service_name: str, location: Dict[str, str]):
+        """Add a producer location for a service."""
+        if service_name not in self.producer_locations:
+            self.producer_locations[service_name] = []
+        self.producer_locations[service_name].append(location)
+
+    def add_consumer_location(self, service_name: str, location: Dict[str, str]):
+        """Add a consumer location for a service."""
+        if service_name not in self.consumer_locations:
+            self.consumer_locations[service_name] = []
+        self.consumer_locations[service_name].append(location)
 
 @dataclass
 class SchemaBase:
