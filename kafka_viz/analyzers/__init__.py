@@ -1,3 +1,3 @@
-"""
-Analyzers package for detecting Kafka usage patterns
-"""
+from .java_analyzer import JavaAnalyzer
+
+__all__ = ['JavaAnalyzer']
