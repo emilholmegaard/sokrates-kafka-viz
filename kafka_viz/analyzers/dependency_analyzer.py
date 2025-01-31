@@ -4,7 +4,8 @@ from pathlib import Path
 from dataclasses import dataclass
 import networkx as nx
 
-from ..models.service import Service, ServiceCollection
+from ..models.service import Service
+from ..models.service_collection import ServiceCollection
 from ..models.schema import Schema, AvroSchema
 
 @dataclass

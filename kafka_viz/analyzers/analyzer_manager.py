@@ -11,7 +11,7 @@ from .avro_analyzer import AvroAnalyzer
 from .spring_analyzer import SpringCloudStreamAnalyzer
 from ..models.service import Service
 from ..models.schema import KafkaTopic
-from ..models import ServiceCollection
+from ..models.service_collection import ServiceCollection
 
 class AnalyzerManager:
     """Manages and coordinates different analyzers."""
