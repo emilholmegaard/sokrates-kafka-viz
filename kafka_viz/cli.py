@@ -2,10 +2,11 @@
 from pathlib import Path
 import typer
 import logging
+import json
 from rich.console import Console
 from rich.progress import Progress
 
-from .analyzers.kafka_analyzer import KafkaAnalyzer
+from .analyzers.analyzer_manager import AnalyzerManager
 from .analyzers.service_analyzer import ServiceAnalyzer
 from .analyzers.avro_analyzer import AvroAnalyzer
 from .visualization.mermaid import MermaidGenerator
@@ -48,9 +49,9 @@ def analyze(
     logger = logging.getLogger('kafka_viz')
     
     try:
-        # Initialize analyzers
+        # Initialize managers and analyzers
+        analyzer_manager = AnalyzerManager()
         service_analyzer = ServiceAnalyzer()
-        kafka_analyzer = KafkaAnalyzer()
         avro_analyzer = AvroAnalyzer()
         services = ServiceCollection()
 
@@ -73,13 +74,18 @@ def analyze(
                 progress.advance(task)
             progress.remove_task(task)
 
-            # Third pass: analyze Kafka usage
+            # Third pass: analyze Kafka usage using analyzer manager
             task = progress.add_task(
                 "Analyzing Kafka usage...",
                 total=len(services.services)
             )
             for service in services.services.values():
-                kafka_analyzer.analyze_service(service)
+                # Use analyzer manager to analyze all files in the service
+                for file_path in service.root_path.rglob('*'):
+                    if file_path.is_file():
+                        topics = analyzer_manager.analyze_file(file_path, service)
+                        if topics:
+                            service.topics.update(topics)
                 progress.advance(task)
 
         # Save results
@@ -105,7 +111,10 @@ def analyze(
             }
         }
 
-        import json
+        # Get debug info from analyzers if in verbose mode
+        if verbose:
+            result["debug_info"] = analyzer_manager.get_debug_info()
+
         with open(output, 'w') as f:
             json.dump(result, f, indent=2)
 
@@ -130,7 +139,6 @@ def visualize(
     """Generate visualization from analysis results."""
     try:
         # Load analysis results
-        import json
         with open(input_file) as f:
             data = json.load(f)
 
