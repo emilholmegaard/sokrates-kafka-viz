@@ -2,7 +2,11 @@
 from typing import Dict, List, Optional
 from pathlib import Path
 
+from .service_analyzer import ServiceAnalyzer
+from .java_analyzer import JavaAnalyzer
 from .kafka_analyzer import KafkaAnalyzer
+from .dependency_analyzer import DependencyAnalyzer
+from .avro_analyzer import AvroAnalyzer
 from .spring_analyzer import SpringCloudStreamAnalyzer
 from ..models.service import Service
 from ..models.schema import KafkaTopic
@@ -12,7 +16,11 @@ class AnalyzerManager:
 
     def __init__(self):
         self.analyzers = [
+            ServiceAnalyzer(),
+            JavaAnalyzer(),
             KafkaAnalyzer(),
+            DependencyAnalyzer(),
+            AvroAnalyzer(),
             SpringCloudStreamAnalyzer()
         ]
 
