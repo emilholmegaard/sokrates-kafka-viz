@@ -1,164 +1,171 @@
 import re
-import logging
-from typing import List, Set
+from typing import Dict, Set, Optional, List
 from pathlib import Path
-from ..models import KafkaTopic, TopicType
+import logging
+
+from ..models.schema import KafkaTopic
+from ..models.service import Service
+from .base import BaseAnalyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
-class JavaAnalyzer:
+class JavaAnalyzer(BaseAnalyzer):
+    """Analyzer for Java source files containing Kafka patterns."""
+    
     def __init__(self):
-        self.topics: Set[KafkaTopic] = set()
-        
-    def analyze_file(self, file_path: Path) -> List[KafkaTopic]:
-        """
-        Analyze a Java file for Kafka topic patterns.
-        Supports both basic patterns and advanced patterns including:
-        - Record-based producers
-        - Configuration-based topics
-        - Collection-based subscriptions
-        - Container factory configs
-        - Spring Cloud Stream patterns
-        """
+        super().__init__()
+        self.topics: Dict[str, KafkaTopic] = {}
+        self.patterns = KafkaPatterns(
+            producers={
+                r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']',
+                r'(?:messageProducer|producer|kafkaTemplate|template)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
+                r'@SendTo\s*\(["\']([^"\']+)["\']',
+                r'@Output\s*\(["\']([^"\']+)["\']'
+            },
+            consumers={
+                r'@KafkaListener\s*\(\s*topics\s*=\s*["\']([^"\']+)["\']',
+                r'@KafkaListener\s*\(\s*topics\s*=\s*\{([^}]+)\}',
+                r'@StreamListener\s*\(["\']([^"\']+)["\']',
+                r'@Input\s*\(["\']([^"\']+)["\']',
+                r'consumer\.subscribe\s*\(\s*Arrays\.asList\s*\((.*?)\)',
+                r'consumer\.subscribe\s*\(\s*List\.of\s*\((.*?)\)',
+                r'consumer\.subscribe\s*\(\s*Set\.of\s*\((.*?)\)'
+            },
+            topic_configs={
+                r'@Value\s*\(["\']?\$\{([^}]+)\}["\']?\)',
+                r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']'
+            }
+        )
+        self.constant_map = {}  # Map of variable names to values
+
+    def can_analyze(self, file_path: Path) -> bool:
+        """Check if this analyzer can handle Java files."""
+        return file_path.suffix.lower() == '.java'
+
+    def _normalize_topic_name(self, name: str) -> str:
+        """Normalize topic name to ensure consistent format for config values."""
+        name = name.strip(' "\'')
+        # Check if it's a constant reference
+        if name in self.constant_map:
+            return self.constant_map[name]
+        # Handle Kafka config values
+        if name.startswith('${') and name.endswith('}'):
+            return name
+        if name.startswith('kafka.') or '.kafka.' in name:
+            return f"${{{name}}}"
+        return name
+
+    def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str):
+        """Add a topic with proper name normalization and location tracking."""
+        name = self._normalize_topic_name(name)
+        if name not in self.topics:
+            self.topics[name] = KafkaTopic(name)
+
+        topic = self.topics[name]
+        location = {
+            'file': str(file_path),
+            'line': line
+        }
+
+        if is_producer:
+            topic.producers.add(service_name)
+            topic.add_producer_location(service_name, location)
+        else:
+            topic.consumers.add(service_name)
+            topic.add_consumer_location(service_name, location)
+
+    def _extract_constants(self, content: str):
+        """Extract constant topic name definitions."""
+        self.constant_map.clear()
+        for match in re.finditer(r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']', content):
+            var_name, value = match.groups()
+            self.constant_map[var_name] = value
+
+    def _analyze_content(self, content: str, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
+        """Analyze file content for Kafka topics."""
+        if self.patterns.should_ignore(content):
+            logger.debug(f"Ignoring {file_path} - matches ignore pattern")
+            return {}
+
         self.topics.clear()
-        logger.info(f"Analyzing file: {file_path}")
-        content = file_path.read_text()
-        
-        logger.debug("Starting pattern analysis...")
-        self._find_record_based_producers(content)
-        self._find_collection_based_consumers(content)
-        self._find_container_configs(content)
-        self._find_stream_patterns(content)
-        self._find_value_annotations(content)
-        
-        logger.info(f"Found {len(self.topics)} topics in {file_path}")
-        logger.debug(f"Topics found: {[t.name for t in self.topics]}")
-        return list(self.topics)
+        self._extract_constants(content)
 
-    def _find_record_based_producers(self, content: str):
-        logger.debug("Searching for record-based producers...")
-        # Match ProducerRecord constructor patterns
-        producer_records = re.finditer(
-            r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\'])+["\']',
-            content
-        )
-        for match in producer_records:
-            topic = match.group(1)
-            logger.debug(f"Found ProducerRecord topic: {topic}")
-            self.topics.add(KafkaTopic(topic, TopicType.PRODUCER))
+        # Process producers
+        for pattern in self.patterns._compiled_producers:
+            for match in re.finditer(pattern.pattern, content, re.MULTILINE):
+                topic_name = match.group(match.lastindex or 1)
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(topic_name, True, file_path, line, service.name)
 
-        # Match messageProducer.publish patterns
-        publish_calls = re.finditer(
-            r'(?:messageProducer|producer)\.publish\s*\(\s*["\']([^"\'])+["\']',
-            content
-        )
-        for match in publish_calls:
-            topic = match.group(1)
-            logger.debug(f"Found messageProducer.publish topic: {topic}")
-            self.topics.add(KafkaTopic(topic, TopicType.PRODUCER))
+        # Process consumers
+        for pattern in self.patterns._compiled_consumers:
+            for match in re.finditer(pattern.pattern, content, re.MULTILINE):
+                line = content[:match.start()].count('\n') + 1
+                topics_str = match.group(match.lastindex or 1)
+                topics = []
+                # Handle different formats
+                if '"' in topics_str or "'" in topics_str:
+                    topics.extend(re.findall(r'["\']([^"\']+)["\']', topics_str))
+                else:
+                    # Try variable references
+                    topics.extend(t.strip() for t in topics_str.split(',') if t.strip())
+                
+                for topic_name in topics:
+                    self._add_topic(topic_name, False, file_path, line, service.name)
 
-        # Match kafkaTemplate.send patterns
-        template_sends = re.finditer(
-            r'(?:kafkaTemplate|template)\.send\s*\(\s*([^,\)]+)',
-            content
-        )
-        for match in template_sends:
-            topic = match.group(1).strip()
-            if topic.startswith(('configuredTopic', '${', 'kafka.')):
-                logger.debug(f"Found kafkaTemplate.send topic: {topic}")
-                self.topics.add(KafkaTopic(topic, TopicType.PRODUCER))
+        # Process @Value annotations
+        for match in re.finditer(r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?\)', content):
+            value = match.group(1)
+            if 'kafka' in value.lower() and 'topic' in value.lower():
+                topic_name = f"${{{value}}}"
+                line = content[:match.start()].count('\n') + 1
+                # Look for nearby context to determine producer/consumer
+                context = content[max(0, match.start()-200):min(len(content), match.end()+200)]
+                is_producer = any(word in context.lower() for word in ['producer', 'send', 'publish', '@sendto'])
+                self._add_topic(topic_name, is_producer, file_path, line, service.name)
 
-    def _find_collection_based_consumers(self, content: str):
-        logger.debug("Searching for collection-based consumers...")
-        # Match Arrays.asList and Set.of patterns
-        collection_patterns = [
-            r'Arrays\.asList\s*\((.*?)\)',
-            r'Set\.of\s*\((.*?)\)',
-            r'List\.of\s*\((.*?)\)'
+        # Process Processor.INPUT/OUTPUT references
+        processor_patterns = [
+            (r'Processor\.INPUT\b', False),  # consumer
+            (r'Processor\.OUTPUT\b', True)   # producer
         ]
-        
-        for pattern in collection_patterns:
-            collections = re.finditer(pattern, content)
-            for match in collections:
-                topics_str = match.group(1)
-                topics = re.findall(r'["\']([^"\'])+["\']', topics_str)
-                for topic in topics:
-                    logger.debug(f"Found collection-based topic: {topic}")
-                    self.topics.add(KafkaTopic(topic, TopicType.CONSUMER))
 
-        # Match @KafkaListener with multiple topics
-        kafka_listeners = re.finditer(
-            r'@KafkaListener\s*\(\s*(?:[^)]*?topics\s*=\s*)\{([^}]+)\}',
-            content
-        )
-        for match in kafka_listeners:
-            topics_str = match.group(1)
-            # Match both string literals and ${} expressions
-            topics = re.findall(r'["\']([^"\'])+["\']|\$\{([^}]+)\}', topics_str)
-            for topic_groups in topics:
-                topic = next(t for t in topic_groups if t)  # Get non-empty group
-                logger.debug(f"Found @KafkaListener topic: {topic}")
-                self.topics.add(KafkaTopic(topic, TopicType.CONSUMER))
+        for pattern, is_producer in processor_patterns:
+            for match in re.finditer(pattern, content):
+                topic_name = 'input' if not is_producer else 'output'
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(topic_name, is_producer, file_path, line, service.name)
 
-    def _find_container_configs(self, content: str):
-        logger.debug("Searching for container configurations...")
-        # Match containerFactory patterns with @KafkaListener
-        factory_configs = re.finditer(
-            r'@KafkaListener\s*\(\s*(?:[^)]*?topics\s*=\s*["\']?\$\{([^}]+)\}["\']?)',
-            content
-        )
-        for match in factory_configs:
-            topic = f"${{{match.group(1)}}}"
-            logger.debug(f"Found container factory topic: {topic}")
-            self.topics.add(KafkaTopic(topic, TopicType.CONSUMER))
+        # Process variable references
+        for var_name in self.constant_map:
+            # Look for variable usage with producers
+            for match in re.finditer(rf'(?:producer|template)\.(?:send|publish)\s*\(\s*{var_name}\b', content):
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(var_name, True, file_path, line, service.name)
 
-    def _find_stream_patterns(self, content: str):
-        logger.debug("Searching for stream patterns...")
-        # Match @Output channel definitions
-        outputs = re.finditer(r'@Output\s*\(\s*["\']([^"\'])+["\']', content)
-        for match in outputs:
-            topic = match.group(1)
-            logger.debug(f"Found @Output channel: {topic}")
-            self.topics.add(KafkaTopic(topic, TopicType.PRODUCER))
+            # Look for variable usage with consumers
+            for match in re.finditer(rf'consumer\.subscribe\s*\([^)]*{var_name}\b', content):
+                line = content[:match.start()].count('\n') + 1
+                self._add_topic(var_name, False, file_path, line, service.name)
 
-        # Match @Input channel definitions
-        inputs = re.finditer(r'@Input\s*\(\s*["\']([^"\'])+["\']', content)
-        for match in inputs:
-            topic = match.group(1)
-            logger.debug(f"Found @Input channel: {topic}")
-            self.topics.add(KafkaTopic(topic, TopicType.CONSUMER))
+        # Sync with service topics
+        for topic_name, topic in self.topics.items():
+            if topic_name not in service.topics:
+                service.topics[topic_name] = topic
+            else:
+                existing = service.topics[topic_name]
+                existing.producers.update(topic.producers)
+                existing.consumers.update(topic.consumers)
+                for producer in topic.producer_locations:
+                    for location in topic.producer_locations[producer]:
+                        existing.add_producer_location(producer, location)
+                for consumer in topic.consumer_locations:
+                    for location in topic.consumer_locations[consumer]:
+                        existing.add_consumer_location(consumer, location)
 
-        # Match StreamListener patterns
-        stream_listeners = re.finditer(
-            r'@StreamListener\s*\(\s*(?:target\s*=\s*)?([^,\)]+)',
-            content
-        )
-        for match in stream_listeners:
-            target = match.group(1).strip()
-            if target.startswith('Processor.'):
-                channel = target.split('.')[-1].lower()
-                logger.debug(f"Found @StreamListener channel: {channel}")
-                self.topics.add(KafkaTopic(channel, TopicType.CONSUMER))
+        return self.topics
 
-        # Match SendTo patterns
-        send_to = re.finditer(r'@SendTo\s*\(\s*([^,\)]+)', content)
-        for match in send_to:
-            target = match.group(1).strip()
-            if target.startswith('Processor.'):
-                channel = target.split('.')[-1].lower()
-                logger.debug(f"Found @SendTo channel: {channel}")
-                self.topics.add(KafkaTopic(channel, TopicType.PRODUCER))
-
-    def _find_value_annotations(self, content: str):
-        logger.debug("Searching for @Value annotations...")
-        # Match @Value annotations with kafka topic configurations
-        value_annotations = re.finditer(
-            r'@Value\s*\(\s*["\']?\$\{([^}]+)\}["\']?',
-            content
-        )
-        for match in value_annotations:
-            config = match.group(1)
-            if 'kafka' in config.lower() and 'topic' in config.lower():
-                topic = f"${{{config}}}"
-                logger.debug(f"Found @Value kafka topic: {topic}")
-                self.topics.add(KafkaTopic(topic, TopicType.PRODUCER))
+    def analyze_file(self, file_path: Path) -> Dict[str, KafkaTopic]:
+        """Analyze a Java file for Kafka topics."""
+        service = Service(name=file_path.parent.name, path=file_path.parent)
+        return self.analyze(file_path, service)
