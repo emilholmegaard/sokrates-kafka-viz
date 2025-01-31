@@ -7,10 +7,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from .analyzers.analyzer_manager import AnalyzerManager
-from .analyzers.service_analyzer import ServiceAnalyzer
-from .analyzers.avro_analyzer import AvroAnalyzer
 from .visualization.mermaid import MermaidGenerator
-from .models import ServiceCollection
 
 app = typer.Typer()
 console = Console()
@@ -77,82 +74,44 @@ def analyze(
     logger = logging.getLogger('kafka_viz')
     
     try:
-        # Initialize managers and analyzers
+        # Initialize analyzer manager
         analyzer_manager = AnalyzerManager()
-        services = ServiceCollection()
-
+        
         with Progress() as progress:
             # First pass: identify services
             task = progress.add_task("Identifying services...", total=None)
-            discovered_services = service_analyzer.find_services(source_dir)
-            for service in discovered_services.values():
-                services.add_service(service)
+            services = analyzer_manager.discover_services(source_dir)
             progress.remove_task(task)
 
             # Second pass: analyze schemas
             task = progress.add_task(
-                "Analyzing Avro schemas...",
+                "Analyzing schemas...",
                 total=len(services.services)
             )
             for service in services.services.values():
-                schemas = avro_analyzer.analyze_directory(service.root_path)
-                service.schemas.update(schemas)
+                analyzer_manager.analyze_schemas(service)
                 progress.advance(task)
             progress.remove_task(task)
 
-            # Third pass: analyze Kafka usage using analyzer manager
+            # Third pass: analyze source files
             task = progress.add_task(
-                "Analyzing Kafka usage...",
+                "Analyzing source files...",
                 total=len(services.services)
             )
             for service in services.services.values():
-                # Use analyzer manager to analyze all relevant files in the service
                 for file_path in service.root_path.rglob('*'):
                     if file_path.is_file() and is_source_file(file_path):
                         try:
                             topics = analyzer_manager.analyze_file(file_path, service)
                             if topics:
                                 service.topics.update(topics)
-                        except UnicodeDecodeError:
-                            if verbose:
-                                logger.warning(f"Skipping binary file: {file_path}")
-                            continue
                         except Exception as e:
                             if verbose:
                                 logger.warning(f"Error analyzing file {file_path}: {e}")
-                            continue
                 progress.advance(task)
 
-        # Save results
-        result = {
-            "services": {
-                name: {
-                    "path": str(svc.root_path),
-                    "language": svc.language,
-                    "topics": {
-                        topic.name: {
-                            "producers": list(topic.producers),
-                            "consumers": list(topic.consumers)
-                        } for topic in svc.topics.values()
-                    },
-                    "schemas": {
-                        schema.name: {
-                            "type": "avro" if schema.__class__.__name__ == "AvroSchema" else "dto",
-                            "namespace": getattr(schema, "namespace", ""),
-                            "fields": schema.fields
-                        } for schema in svc.schemas.values()
-                    }
-                } for name, svc in services.services.items()
-            }
-        }
-
-        # Get debug info from analyzers if in verbose mode
-        if verbose:
-            result["debug_info"] = analyzer_manager.get_debug_info()
-
-        with open(output, 'w') as f:
-            json.dump(result, f, indent=2)
-
+        # Save analysis results
+        analyzer_manager.save_output(services, output, include_debug=verbose)
         console.print(f"\n[green]Analysis complete! Results written to {output}")
 
     except Exception as e:
