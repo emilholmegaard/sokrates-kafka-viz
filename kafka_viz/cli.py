@@ -1,6 +1,7 @@
 """Command-line interface for Kafka visualization tool."""
 from pathlib import Path
 import typer
+import logging
 from rich.console import Console
 from rich.progress import Progress
 
@@ -29,9 +30,23 @@ def analyze(
     include_tests: bool = typer.Option(
         False,
         help="Include test files in analysis"
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose logging"
     )
 ):
     """Analyze Kafka usage in a microservices codebase."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    logger = logging.getLogger('kafka_viz')
+    
     try:
         # Initialize analyzers
         service_analyzer = ServiceAnalyzer()

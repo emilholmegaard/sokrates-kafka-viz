@@ -8,7 +8,7 @@ def configure_logging(verbose: bool = False):
         verbose (bool): If True, set logging level to DEBUG. Otherwise, set to INFO.
     """
     # Create logger
-    logger = logging.getLogger('sokrates_kafka_viz')
+    logger = logging.getLogger('kafka_viz')
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     # Create console handler and set level
