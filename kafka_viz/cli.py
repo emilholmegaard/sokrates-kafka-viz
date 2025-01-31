@@ -79,8 +79,6 @@ def analyze(
     try:
         # Initialize managers and analyzers
         analyzer_manager = AnalyzerManager()
-        service_analyzer = ServiceAnalyzer()
-        avro_analyzer = AvroAnalyzer()
         services = ServiceCollection()
 
         with Progress() as progress:

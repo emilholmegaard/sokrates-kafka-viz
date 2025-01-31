@@ -2,6 +2,7 @@
 from typing import Dict, List, Optional, Set
 from pathlib import Path
 import json
+import logging
 import re
 import ast
 import javalang
@@ -9,6 +10,8 @@ from urllib.parse import urlparse
 import requests
 
 from ..models.schema import AvroSchema
+
+logger = logging.getLogger(__name__)
 
 class AvroAnalyzer:
     """Analyzer for Avro schemas and related code."""
@@ -36,6 +39,8 @@ class AvroAnalyzer:
         # Find .avsc files
         for avsc_file in directory.rglob('*.avsc'):
             schema = self.parse_avsc_file(avsc_file)
+            logger.debug(f"Found avro schema name: {schema.name} in file: {avsc_file}")
+
             if schema:
                 schemas[schema.name] = schema
         
@@ -83,6 +88,7 @@ class AvroAnalyzer:
             )
             
         except Exception as e:
+            logger.error(f"Error parsing Avro schema {file_path}: {e}")
             print(f"Error parsing Avro schema {file_path}: {e}")
             return None
             
@@ -122,6 +128,7 @@ class AvroAnalyzer:
                     )
                     
         except Exception as e:
+            logger.error(f"Error analyzing source file {file_path}: {e}")
             print(f"Error analyzing source file {file_path}: {e}")
             return None
             
@@ -164,6 +171,7 @@ class AvroAnalyzer:
                 if schema:
                     schemas[schema.name] = schema
             except Exception as e:
+                logger.error(f"Error fetching schema from {url}: {e}")
                 print(f"Error fetching schema from {url}: {e}")
                 
         return schemas

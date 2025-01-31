@@ -53,6 +53,7 @@ class JavaAnalyzer(BaseAnalyzer):
             return name
         if name.startswith('kafka.') or '.kafka.' in name:
             return f"${{{name}}}"
+        logger.debug(f"Normalized name:  {name}")
         return name
 
     def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str):
@@ -70,9 +71,11 @@ class JavaAnalyzer(BaseAnalyzer):
         if is_producer:
             topic.producers.add(service_name)
             topic.add_producer_location(service_name, location)
+            logger.debug(f"producer {service_name} with topic {topic}")
         else:
             topic.consumers.add(service_name)
             topic.add_consumer_location(service_name, location)
+            logger.debug(f"consumer {service_name} with topic {topic}")
 
     def _extract_constants(self, content: str):
         """Extract constant topic name definitions."""

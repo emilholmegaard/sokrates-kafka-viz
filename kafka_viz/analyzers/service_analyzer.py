@@ -62,7 +62,7 @@ class ServiceAnalyzer:
                     name = self._extract_service_name(build_file, language)
                     
                     if name:
-                        logger.debug(f"Found {name} potential name in {pattern}")
+                        logger.debug(f"Found {name} as potential name in {pattern}")
                         # Create service
                         service = Service(
                             name=name,
