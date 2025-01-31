@@ -15,6 +15,34 @@ from .models import ServiceCollection
 app = typer.Typer()
 console = Console()
 
+def is_source_file(file_path: Path) -> bool:
+    """Check if a file is a source file that should be analyzed."""
+    # Define extensions for source files we want to analyze
+    SOURCE_EXTENSIONS = {
+        '.java', '.kt', '.scala',  # JVM languages
+        '.py',                     # Python
+        '.js', '.ts',             # JavaScript/TypeScript
+        '.go',                    # Go
+        '.cs',                    # C#
+        '.xml', '.yaml', '.yml',  # Config files
+        '.properties',            # Java properties
+        '.gradle', '.sbt'         # Build files
+    }
+    
+    # Skip hidden files and directories
+    if any(part.startswith('.') for part in file_path.parts):
+        return False
+        
+    # Skip common binary and non-source directories
+    SKIP_DIRS = {
+        'node_modules', 'target', 'build', 'dist', 'venv',
+        '__pycache__', '.git', '.idea', '.vscode'
+    }
+    if any(part in SKIP_DIRS for part in file_path.parts):
+        return False
+        
+    return file_path.suffix.lower() in SOURCE_EXTENSIONS
+
 @app.command()
 def analyze(
     source_dir: Path = typer.Argument(
@@ -80,12 +108,21 @@ def analyze(
                 total=len(services.services)
             )
             for service in services.services.values():
-                # Use analyzer manager to analyze all files in the service
+                # Use analyzer manager to analyze all relevant files in the service
                 for file_path in service.root_path.rglob('*'):
-                    if file_path.is_file():
-                        topics = analyzer_manager.analyze_file(file_path, service)
-                        if topics:
-                            service.topics.update(topics)
+                    if file_path.is_file() and is_source_file(file_path):
+                        try:
+                            topics = analyzer_manager.analyze_file(file_path, service)
+                            if topics:
+                                service.topics.update(topics)
+                        except UnicodeDecodeError:
+                            if verbose:
+                                logger.warning(f"Skipping binary file: {file_path}")
+                            continue
+                        except Exception as e:
+                            if verbose:
+                                logger.warning(f"Error analyzing file {file_path}: {e}")
+                            continue
                 progress.advance(task)
 
         # Save results
