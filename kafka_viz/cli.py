@@ -2,17 +2,43 @@
 from pathlib import Path
 import typer
 import logging
+import json
 from rich.console import Console
 from rich.progress import Progress
 
-from .analyzers.kafka_analyzer import KafkaAnalyzer
-from .analyzers.service_analyzer import ServiceAnalyzer
-from .analyzers.avro_analyzer import AvroAnalyzer
+from .analyzers.analyzer_manager import AnalyzerManager
 from .visualization.mermaid import MermaidGenerator
-from .models import ServiceCollection
 
 app = typer.Typer()
 console = Console()
+
+def is_source_file(file_path: Path) -> bool:
+    """Check if a file is a source file that should be analyzed."""
+    # Define extensions for source files we want to analyze
+    SOURCE_EXTENSIONS = {
+        '.java', '.kt', '.scala',  # JVM languages
+        '.py',                     # Python
+        '.js', '.ts',             # JavaScript/TypeScript
+        '.go',                    # Go
+        '.cs',                    # C#
+        '.xml', '.yaml', '.yml',  # Config files
+        '.properties',            # Java properties
+        '.gradle', '.sbt'         # Build files
+    }
+    
+    # Skip hidden files and directories
+    if any(part.startswith('.') for part in file_path.parts):
+        return False
+        
+    # Skip common binary and non-source directories
+    SKIP_DIRS = {
+        'node_modules', 'target', 'build', 'dist', 'venv',
+        '__pycache__', '.git', '.idea', '.vscode'
+    }
+    if any(part in SKIP_DIRS for part in file_path.parts):
+        return False
+        
+    return file_path.suffix.lower() in SOURCE_EXTENSIONS
 
 @app.command()
 def analyze(
@@ -48,67 +74,44 @@ def analyze(
     logger = logging.getLogger('kafka_viz')
     
     try:
-        # Initialize analyzers
-        service_analyzer = ServiceAnalyzer()
-        kafka_analyzer = KafkaAnalyzer()
-        avro_analyzer = AvroAnalyzer()
-        services = ServiceCollection()
-
+        # Initialize analyzer manager
+        analyzer_manager = AnalyzerManager()
+        
         with Progress() as progress:
             # First pass: identify services
             task = progress.add_task("Identifying services...", total=None)
-            discovered_services = service_analyzer.find_services(source_dir)
-            for service in discovered_services.values():
-                services.add_service(service)
+            services = analyzer_manager.discover_services(source_dir)
             progress.remove_task(task)
 
             # Second pass: analyze schemas
             task = progress.add_task(
-                "Analyzing Avro schemas...",
+                "Analyzing schemas...",
                 total=len(services.services)
             )
             for service in services.services.values():
-                schemas = avro_analyzer.analyze_directory(service.root_path)
-                service.schemas.update(schemas)
+                analyzer_manager.analyze_schemas(service)
                 progress.advance(task)
             progress.remove_task(task)
 
-            # Third pass: analyze Kafka usage
+            # Third pass: analyze source files
             task = progress.add_task(
-                "Analyzing Kafka usage...",
+                "Analyzing source files...",
                 total=len(services.services)
             )
             for service in services.services.values():
-                kafka_analyzer.analyze_service(service)
+                for file_path in service.root_path.rglob('*'):
+                    if file_path.is_file() and is_source_file(file_path):
+                        try:
+                            topics = analyzer_manager.analyze_file(file_path, service)
+                            if topics:
+                                service.topics.update(topics)
+                        except Exception as e:
+                            if verbose:
+                                logger.warning(f"Error analyzing file {file_path}: {e}")
                 progress.advance(task)
 
-        # Save results
-        result = {
-            "services": {
-                name: {
-                    "path": str(svc.root_path),
-                    "language": svc.language,
-                    "topics": {
-                        topic.name: {
-                            "producers": list(topic.producers),
-                            "consumers": list(topic.consumers)
-                        } for topic in svc.topics.values()
-                    },
-                    "schemas": {
-                        schema.name: {
-                            "type": "avro" if schema.__class__.__name__ == "AvroSchema" else "dto",
-                            "namespace": getattr(schema, "namespace", ""),
-                            "fields": schema.fields
-                        } for schema in svc.schemas.values()
-                    }
-                } for name, svc in services.services.items()
-            }
-        }
-
-        import json
-        with open(output, 'w') as f:
-            json.dump(result, f, indent=2)
-
+        # Save analysis results
+        analyzer_manager.save_output(services, output, include_debug=verbose)
         console.print(f"\n[green]Analysis complete! Results written to {output}")
 
     except Exception as e:
@@ -130,7 +133,6 @@ def visualize(
     """Generate visualization from analysis results."""
     try:
         # Load analysis results
-        import json
         with open(input_file) as f:
             data = json.load(f)
 
