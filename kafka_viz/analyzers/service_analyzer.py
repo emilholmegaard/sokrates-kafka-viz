@@ -1,11 +1,13 @@
 """Service analyzer for detecting microservices in a codebase."""
 from typing import Dict, Set, Optional, List
 from pathlib import Path
-import json
+import json, logging
 import xml.etree.ElementTree as ET
 import re
 
 from ..models.service import Service
+
+logger = logging.getLogger(__name__)
 
 class ServiceAnalyzer:
     """Analyzer for detecting and analyzing microservices."""
@@ -41,7 +43,9 @@ class ServiceAnalyzer:
             service = self._detect_service(path)
             if service:
                 services[service.name] = service
-                
+        
+        logger.debug(f"Found {len(services)} services in {root_path}")
+
         return services
         
     def _detect_service(self, path: Path) -> Optional[Service]:
@@ -49,12 +53,16 @@ class ServiceAnalyzer:
         if not path.is_dir():
             return None
         
+        logger.debug(f"Found {len(self.build_patterns)} services in {path}")
         for language, patterns in self.build_patterns.items():
+            
             for pattern in patterns:
                 build_file = path / pattern
                 if build_file.exists():
                     name = self._extract_service_name(build_file, language)
+                    
                     if name:
+                        logger.debug(f"Found {name} potential name in {pattern}")
                         # Create service
                         service = Service(
                             name=name,
