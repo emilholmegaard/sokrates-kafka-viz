@@ -29,6 +29,7 @@ dev = [
     "black>=22.0.0",
     "isort>=5.0.0",
     "flake8>=6.0.0",
+    "networkx>=3.4.2",
 ]
 
 [tool.pytest.ini_options]
