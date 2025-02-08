@@ -118,7 +118,7 @@ class KafkaAnalyzer(BaseAnalyzer):
                     
         return service.topics
 
-    def analyze(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
+    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
         """Analyze Java file for Kafka patterns.
         
         Args:
