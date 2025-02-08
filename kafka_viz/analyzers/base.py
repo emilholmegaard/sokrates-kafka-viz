@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional, Pattern, Set, NamedTuple
+from typing import Dict, Optional, Set, NamedTuple
 import re
 import logging
 
@@ -20,13 +20,13 @@ class KafkaPatternMatch(NamedTuple):
 
 class KafkaPatterns:
     """Container for Kafka-related regex patterns."""
-    def __init__(
-        self,
-        producers: Set[str] = None,
-        consumers: Set[str] = None,
-        topic_configs: Set[str] = None,
-        ignore_patterns: Set[str] = None,
-        custom_patterns: Dict[str, Set[str]] = None
+    
+    def __init__(self,
+        producers: Optional[Set[str]] = None,
+        consumers: Optional[Set[str]] = None,
+        topic_configs: Optional[Set[str]] = None,
+        ignore_patterns: Optional[Set[str]] = None,
+        custom_patterns: Optional[Dict[str, Set[str]]] = None
     ):
         self.producers = producers or set()
         self.consumers = consumers or set()

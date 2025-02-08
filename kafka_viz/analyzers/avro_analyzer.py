@@ -39,16 +39,17 @@ class AvroAnalyzer:
         # Find .avsc files
         for avsc_file in directory.rglob('*.avsc'):
             schema = self.parse_avsc_file(avsc_file)
-            logger.debug(f"Found avro schema name: {schema.name} in file: {avsc_file}")
+            if schema is not None:
+                logger.debug(f"Found avro schema name: {schema.name} in file: {avsc_file}")
 
-            if schema:
+            if schema is not None:
                 schemas[schema.name] = schema
         
         # Find Java/Kotlin/Scala files with @AvroGenerated
         for ext in ['.java', '.kt', '.scala']:
             for source_file in directory.rglob(f'*{ext}'):
                 schema = self.analyze_jvm_source(source_file)
-                if schema:
+                if schema is not None:
                     schemas[schema.name] = schema
                     
         # Find schema registry references

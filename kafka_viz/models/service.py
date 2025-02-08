@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, Optional, Set
 
-from .schema import KafkaTopic
+from .schema import KafkaTopic, Schema
 
 class Service:
     """Represents a microservice in the system."""

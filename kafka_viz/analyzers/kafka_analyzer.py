@@ -169,4 +169,4 @@ class KafkaAnalyzer(BaseAnalyzer):
             for match in re.finditer(pattern, content):
                 process_match(match, False)
 
-        return topics if topics else None
+        return topics
