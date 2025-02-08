@@ -1,11 +1,14 @@
 """Schema models for data contracts."""
+
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set, List
 from pathlib import Path
+from typing import Dict, List, Optional, Set
+
 
 @dataclass
 class KafkaTopic:
     """Represents a Kafka topic."""
+
     name: str
     producers: Set[str] = field(default_factory=set)
     consumers: Set[str] = field(default_factory=set)
@@ -24,26 +27,34 @@ class KafkaTopic:
             self.consumer_locations[service_name] = []
         self.consumer_locations[service_name].append(location)
 
+
 @dataclass
 class SchemaBase:
     """Base class for schema properties."""
+
     name: str
     file_path: Path
+
 
 @dataclass
 class Schema(SchemaBase):
     """Schema with fields."""
+
     fields: Dict[str, str] = field(default_factory=dict)
+
 
 @dataclass
 class AvroSchema(Schema):
     """Represents an Avro schema."""
+
     namespace: str = ""
     type_name: str = "record"
+
 
 @dataclass
 class DTOSchema(Schema):
     """Represents a DTO class."""
+
     serialization_format: Optional[str] = None  # 'JSON', 'XML', etc.
     service_name: Optional[str] = None
     language: str = ""

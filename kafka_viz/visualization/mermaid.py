@@ -1,6 +1,7 @@
 # mermaid_generator.py
 from .base import BaseGenerator
 
+
 class MermaidGenerator(BaseGenerator):
     def generate_html(self, data: dict) -> str:
         mermaid_diagram = self._generate_mermaid_diagram(data)
@@ -22,12 +23,15 @@ class MermaidGenerator(BaseGenerator):
 
         # Add nodes for each service
         for service_name in services:
-            diagram += f'  {self._escape_node_name(service_name)}[{service_name}]\n'
+            diagram += f"  {self._escape_node_name(service_name)}[{service_name}]\n"
 
         # Add edges for dependencies
         for service_name, service_data in services.items():
             for dependency in service_data.get("dependencies", []):
-                diagram += f'  {self._escape_node_name(service_name)} --> {self._escape_node_name(dependency)}\n'
+                diagram += (
+                    f"  {self._escape_node_name(service_name)} --> "
+                    f"{self._escape_node_name(dependency)}\n"
+                )
 
         return diagram
 

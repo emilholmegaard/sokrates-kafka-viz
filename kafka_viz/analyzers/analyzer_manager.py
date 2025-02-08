@@ -1,17 +1,19 @@
 """Manager class to coordinate different analyzers."""
-from typing import Dict, List, Optional, Any
-from pathlib import Path
-import json
 
-from .service_analyzer import ServiceAnalyzer
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from ..models.schema import KafkaTopic
+from ..models.service import Service
+from ..models.service_collection import ServiceCollection
+from .avro_analyzer import AvroAnalyzer
+from .dependency_analyzer import DependencyAnalyzer
 from .java_analyzer import JavaAnalyzer
 from .kafka_analyzer import KafkaAnalyzer
-from .dependency_analyzer import DependencyAnalyzer
-from .avro_analyzer import AvroAnalyzer
+from .service_analyzer import ServiceAnalyzer
 from .spring_analyzer import SpringCloudStreamAnalyzer
-from ..models.service import Service
-from ..models.schema import KafkaTopic
-from ..models.service_collection import ServiceCollection
+
 
 class AnalyzerManager:
     """Manages and coordinates different analyzers."""
@@ -19,14 +21,14 @@ class AnalyzerManager:
     def __init__(self):
         # Define analyzer order based on dependencies
         self.service_analyzer = ServiceAnalyzer()  # Must run first to discover services
-        self.schema_analyzer = AvroAnalyzer()      # Should run before Kafka analysis
-        
+        self.schema_analyzer = AvroAnalyzer()  # Should run before Kafka analysis
+
         # Other analyzers can run in any order
         self.code_analyzers = [
             JavaAnalyzer(),
             KafkaAnalyzer(),
             DependencyAnalyzer(),
-            SpringCloudStreamAnalyzer()
+            SpringCloudStreamAnalyzer(),
         ]
 
     def discover_services(self, source_dir: Path) -> ServiceCollection:
@@ -42,7 +44,9 @@ class AnalyzerManager:
         schemas = self.schema_analyzer.analyze_directory(service.root_path)
         service.schemas.update(schemas)
 
-    def analyze_file(self, file_path: Path, service: Service) -> Optional[Dict[str, KafkaTopic]]:
+    def analyze_file(
+        self, file_path: Path, service: Service
+    ) -> Optional[Dict[str, KafkaTopic]]:
         """Analyze a file using all available code analyzers."""
         all_topics = {}
 
@@ -63,7 +67,9 @@ class AnalyzerManager:
 
         return all_topics if all_topics else None
 
-    def generate_output(self, services: ServiceCollection, include_debug: bool = False) -> Dict[str, Any]:
+    def generate_output(
+        self, services: ServiceCollection, include_debug: bool = False
+    ) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
         result: Dict[str, Any] = {
             "services": {
@@ -73,17 +79,24 @@ class AnalyzerManager:
                     "topics": {
                         topic.name: {
                             "producers": list(topic.producers),
-                            "consumers": list(topic.consumers)
-                        } for topic in svc.topics.values()
+                            "consumers": list(topic.consumers),
+                        }
+                        for topic in svc.topics.values()
                     },
                     "schemas": {
                         schema.name: {
-                            "type": "avro" if schema.__class__.__name__ == "AvroSchema" else "dto",
+                            "type": (
+                                "avro"
+                                if schema.__class__.__name__ == "AvroSchema"
+                                else "dto"
+                            ),
                             "namespace": getattr(schema, "namespace", ""),
-                            "fields": schema.fields
-                        } for schema in svc.schemas.values()
-                    }
-                } for name, svc in services.services.items()
+                            "fields": schema.fields,
+                        }
+                        for schema in svc.schemas.values()
+                    },
+                }
+                for name, svc in services.services.items()
             }
         }
 
@@ -92,10 +105,15 @@ class AnalyzerManager:
 
         return result
 
-    def save_output(self, services: ServiceCollection, output_path: Path, include_debug: bool = False):
+    def save_output(
+        self,
+        services: ServiceCollection,
+        output_path: Path,
+        include_debug: bool = False,
+    ):
         """Generate and save analysis results to a JSON file."""
         result = self.generate_output(services, include_debug)
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
 
     def get_debug_info(self) -> List[Dict[str, Any]]:

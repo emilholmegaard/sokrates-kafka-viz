@@ -1,8 +1,9 @@
 """
 Service collection model.
 """
-from typing import Dict, Optional, Iterator
+
 from pathlib import Path
+from typing import Dict, Iterator, Optional
 
 from .service import Service
 
@@ -16,7 +17,7 @@ class ServiceCollection:
 
     def add_service(self, service: Service) -> None:
         """Add a service to the collection.
-        
+
         Args:
             service: Service to add
         """
@@ -24,10 +25,10 @@ class ServiceCollection:
 
     def get_service(self, name: str) -> Optional[Service]:
         """Get a service by name.
-        
+
         Args:
             name: Name of the service to get
-            
+
         Returns:
             Service if found, None otherwise
         """
@@ -35,7 +36,7 @@ class ServiceCollection:
 
     def get_all_services(self) -> Dict[str, Service]:
         """Get all services.
-        
+
         Returns:
             Dict of service name to Service objects
         """
@@ -43,7 +44,7 @@ class ServiceCollection:
 
     def remove_service(self, name: str) -> None:
         """Remove a service from the collection.
-        
+
         Args:
             name: Name of the service to remove
         """
