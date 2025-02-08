@@ -12,6 +12,20 @@ jobs:
     strategy:
       matrix:
         python-version: [3.8, 3.9, "3.10"]
+    
+    services:
+      kafka:
+        image: wurstmeister/kafka:2.13-2.6.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_ADVERTISED_HOST_NAME: localhost
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          
+      zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+          - 2181:2181
 
     steps:
     - uses: actions/checkout@v3
@@ -21,47 +35,40 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e .[dev]
         
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        python -m pytest tests/ --cov=kafka_viz --cov-report=term-missing
+        python -m pytest tests/ --cov=kafka_viz --cov-report=xml --cov-report=term-missing
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
         
     - name: Type checking
       run: |
-        mypy kafka_viz
+        mypy kafka_viz --ignore-missing-imports
         
     - name: Lint
       run: |
         black --check kafka_viz tests
-        isort --check kafka_viz tests
-        flake8 kafka_viz tests
-
-  integration:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
-    
-    - name: Integration tests
-      run: |
-        python -m pytest tests/integration/
+        isort --check-only kafka_viz tests
+        flake8 kafka_viz tests --max-line-length=100
 
   build:
-    needs: [test, integration]
+    needs: test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -74,8 +81,14 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build
+        pip install build wheel
         
     - name: Build package
       run: |
         python -m build
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/

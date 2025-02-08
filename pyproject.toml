@@ -29,6 +29,10 @@ dev = [
     "black>=22.0.0",
     "isort>=5.0.0",
     "flake8>=6.0.0",
+    "networkx>=3.1.0",
+    "javalang>=0.13.0",
+    "requests>=2.32.0",
+    "types-requests>=2.32.0",
 ]
 
 [tool.pytest.ini_options]
@@ -43,3 +47,5 @@ include = '\.pyi?$'
 [tool.isort]
 profile = "black"
 multi_line_output = 3
+line_length = 100
+include_trailing_comma = true
