@@ -65,7 +65,7 @@ class AnalyzerManager:
 
     def generate_output(self, services: ServiceCollection, include_debug: bool = False) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
-        result = {
+        result: Dict[str, Any] = {
             "services": {
                 name: {
                     "path": str(svc.root_path),
