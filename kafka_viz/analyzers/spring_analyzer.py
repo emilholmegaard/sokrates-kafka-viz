@@ -1,12 +1,8 @@
 """Spring Cloud Stream specific analyzer."""
 
-import re
 from pathlib import Path
-from typing import Dict, Optional
 
-from ..models.schema import KafkaTopic
-from ..models.service import Service
-from .base import BaseAnalyzer, KafkaPatternMatch, KafkaPatterns
+from .base import BaseAnalyzer, KafkaPatterns
 
 
 class SpringCloudStreamAnalyzer(BaseAnalyzer):

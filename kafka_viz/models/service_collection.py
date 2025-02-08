@@ -2,7 +2,6 @@
 Service collection model.
 """
 
-from pathlib import Path
 from typing import Dict, Iterator, Optional
 
 from .service import Service

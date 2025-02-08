@@ -38,7 +38,6 @@ class TestAnalyzerManager:
         java_file.write_text(
             """
         package com.example;
-        
         @EnableBinding
         public class Service {
         }
@@ -76,8 +75,7 @@ class TestAnalyzerManager:
         py_file = src_dir / "main.py"
         py_file.write_text(
             """
-        from kafka import KafkaConsumer
-        
+        from kafka import KafkaConsumer       
         consumer = KafkaConsumer('test-topic')
         """
         )
