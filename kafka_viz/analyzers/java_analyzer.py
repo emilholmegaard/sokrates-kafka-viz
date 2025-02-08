@@ -65,7 +65,7 @@ class JavaAnalyzer(BaseAnalyzer):
         topic = self.topics[name]
         location = {
             'file': str(file_path),
-            'line': line
+            'line': str(line)
         }
 
         if is_producer:
