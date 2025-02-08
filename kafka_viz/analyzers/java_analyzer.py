@@ -36,7 +36,7 @@ class JavaAnalyzer(BaseAnalyzer):
                 r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']'
             }
         )
-        self.constant_map = {}  # Map of variable names to values
+        self.constant_map: Dict[str, str] = {}  # Map of variable names to values
 
     def can_analyze(self, file_path: Path) -> bool:
         """Check if this analyzer can handle Java files."""
