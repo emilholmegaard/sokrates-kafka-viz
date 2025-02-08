@@ -20,7 +20,7 @@ class DependencyEdge:
 class DependencyAnalyzer:
     """Analyzer for finding dependencies between services."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize dependency analyzer."""
         self.graph = nx.DiGraph()
         self.edge_data: Dict[Tuple[str, str], DependencyEdge] = {}
