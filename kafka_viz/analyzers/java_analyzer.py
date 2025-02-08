@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class JavaAnalyzer(BaseAnalyzer):
     """Analyzer for Java source files containing Kafka patterns."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.topics: Dict[str, KafkaTopic] = {}
         self.patterns = KafkaPatterns(
@@ -56,7 +56,7 @@ class JavaAnalyzer(BaseAnalyzer):
         logger.debug(f"Normalized name:  {name}")
         return name
 
-    def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str):
+    def _add_topic(self, name: str, is_producer: bool, file_path: Path, line: int, service_name: str) -> None:
         """Add a topic with proper name normalization and location tracking."""
         name = self._normalize_topic_name(name)
         if name not in self.topics:
@@ -77,7 +77,7 @@ class JavaAnalyzer(BaseAnalyzer):
             topic.add_consumer_location(service_name, location)
             logger.debug(f"consumer {service_name} with topic {topic}")
 
-    def _extract_constants(self, content: str):
+    def _extract_constants(self, content: str) -> None:
         """Extract constant topic name definitions."""
         self.constant_map.clear()
         for match in re.finditer(r'private\s+(?:static\s+final\s+)?String\s+(\w+)\s*=\s*["\']([^"\']+)["\']', content):
