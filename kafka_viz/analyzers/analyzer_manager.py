@@ -1,5 +1,5 @@
 """Manager class to coordinate different analyzers."""
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
 
@@ -63,7 +63,7 @@ class AnalyzerManager:
 
         return all_topics if all_topics else None
 
-    def generate_output(self, services: ServiceCollection, include_debug: bool = False) -> Dict:
+    def generate_output(self, services: ServiceCollection, include_debug: bool = False) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
         result = {
             "services": {
@@ -98,7 +98,7 @@ class AnalyzerManager:
         with open(output_path, 'w') as f:
             json.dump(result, f, indent=2)
 
-    def get_debug_info(self) -> List[Dict]:
+    def get_debug_info(self) -> List[Dict[str, Any]]:
         """Get debug information from all analyzers."""
         analyzers = [self.service_analyzer, self.schema_analyzer] + self.code_analyzers
         return [analyzer.get_debug_info() for analyzer in analyzers]
