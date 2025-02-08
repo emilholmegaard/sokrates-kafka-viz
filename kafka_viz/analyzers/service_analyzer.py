@@ -5,7 +5,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional
 
 from ..models.service import Service
 
@@ -241,7 +241,8 @@ class ServiceAnalyzer:
 
             # Check source files for schema references
             schema_pattern = re.compile(
-                rf'(?:Schema|@AvroGenerated|schemaReference)\s*[=:]\s*["\'].*{re.escape(schema_name)}["\']'
+                rf'(?:Schema|@AvroGenerated|schemaReference)\s*[=:]\s*["\'].*'
+                rf'{re.escape(schema_name)}["\']'
             )
 
             # Check if schema file exists in any location

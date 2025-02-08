@@ -1,7 +1,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
@@ -19,7 +19,8 @@ class JavaAnalyzer(BaseAnalyzer):
         self.patterns = KafkaPatterns(
             producers={
                 r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*["\']([^"\']+)["\']',
-                r'(?:messageProducer|producer|kafkaTemplate|template)\.(publish|send)\s*\(\s*["\']([^"\']+)["\']',
+                r"(?:messageProducer|producer|kafkaTemplate|template)\."
+                r'(publish|send)\s*\(\s*["\']([^"\']+)["\']',
                 r'@SendTo\s*\(["\']([^"\']+)["\']',
                 r'@Output\s*\(["\']([^"\']+)["\']',
             },

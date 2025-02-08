@@ -1,7 +1,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Dict
 
 from kafka_viz.models import KafkaTopic, Service
 
@@ -19,34 +19,54 @@ class KafkaAnalyzer(BaseAnalyzer):
         self.patterns = KafkaPatterns(
             producers={
                 # Plain Kafka patterns
-                r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*"([^"]+)"',  # ProducerRecord constructor
-                r'\.send\s*\(\s*"([^"]+)"',  # Direct send
-                r'kafkaTemplate\.send\s*\(\s*"([^"]+)"',  # KafkaTemplate send
-                r"kafkaTemplate\.send\s*\(\s*([A-Z_]+)",  # KafkaTemplate with constant
-                r"producer\.send\s*\(\s*([A-Z_]+)",  # Producer with constant
-                r"new\s+ProducerRecord\s*<[^>]*>\s*\(\s*([A-Z_]+)",  # Producer Record with constant
+                # ProducerRecord constructor
+                r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*"([^"]+)"',
+                # Direct send
+                r'\.send\s*\(\s*"([^"]+)"',
+                # KafkaTemplate send
+                r'kafkaTemplate\.send\s*\(\s*"([^"]+)"',
+                # KafkaTemplate with constant
+                r"kafkaTemplate\.send\s*\(\s*([A-Z_]+)",
+                # Producer with constant
+                r"producer\.send\s*\(\s*([A-Z_]+)",
+                # Producer Record with constant
+                r"new\s+ProducerRecord\s*<[^>]*>\s*\(\s*([A-Z_]+)",
                 # Spring Cloud Stream patterns
-                r'@SendTo\s*\(\s*"([^"]+)"\s*\)',  # SendTo annotation
-                r'@Output\s*\(\s*"([^"]+)"\s*\)',  # Output channel
+                # SendTo annotation
+                r'@SendTo\s*\(\s*"([^"]+)"\s*\)',
+                # Output channel
+                r'@Output\s*\(\s*"([^"]+)"\s*\)',
             },
             consumers={
                 # Plain Kafka patterns
-                r'\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*"([^"]+)"\s*\)',  # Subscribe with literal
-                r"\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*([A-Z_]+)\s*\)",  # Subscribe with constant
-                r'@KafkaListener\s*\(\s*topics\s*=\s*"([^"]+)"\s*\)',  # Single topic literal
-                r"@KafkaListener\s*\(\s*topics\s*=\s*([A-Z_]+)\s*\)",  # Single topic constant
-                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"(?:\s*,\s*"[^"]+")*\s*\}\s*\)',  # Array topics
-                r"@KafkaListener\s*\(\s*topics\s*=\s*\{\s*([A-Z_]+)(?:\s*,\s*[A-Z_]+)*\s*\}\s*\)",  # Array constants
+                # Subscribe with literal
+                r'\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*"([^"]+)"\s*\)',
+                # Subscribe with constant
+                r"\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*([A-Z_]+)\s*\)",
+                # Single topic literal
+                r'@KafkaListener\s*\(\s*topics\s*=\s*"([^"]+)"\s*\)',
+                # Single topic constant
+                r"@KafkaListener\s*\(\s*topics\s*=\s*([A-Z_]+)\s*\)",
+                # Array topics
+                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"(?:\s*,\s*"[^"]+")*\s*\}\s*\)',
+                # Array constants
+                r"@KafkaListener\s*\(\s*topics\s*=\s*\{\s*([A-Z_]+)(?:\s*,\s*[A-Z_]+)*\s*\}\s*\)",
                 # Spring Cloud Stream patterns
-                r'@StreamListener\s*\(\s*"([^"]+)"\s*\)',  # StreamListener
-                r'@Input\s*\(\s*"([^"]+)"\s*\)',  # Input channel
+                # StreamListener
+                r'@StreamListener\s*\(\s*"([^"]+)"\s*\)',
+                # Input channel
+                r'@Input\s*\(\s*"([^"]+)"\s*\)',
             },
             topic_configs={
                 # Configuration patterns
-                r'(?:private|public|static)\s+(?:final\s+)?String\s+([A-Z_]+)\s*=\s*"([^"]+)"',  # Constants
-                r'@Value\s*\(\s*"\$\{([^}]+\.topic)\}"\s*\)\s*private\s+String\s+([^;\s]+)',  # Spring config
-                r"spring\.cloud\.stream\.bindings\.([^.]+)\.destination\s*=",  # Stream binding
-                r'@TopicConfig\s*\(\s*name\s*=\s*"([^"]+)"',  # Topic config
+                # Constants
+                r'(?:private|public|static)\s+(?:final\s+)?String\s+([A-Z_]+)\s*=\s*"([^"]+)"',
+                # Spring config
+                r'@Value\s*\(\s*"\$\{([^}]+\.topic)\}"\s*\)\s*private\s+String\s+([^;\s]+)',
+                # Stream binding
+                r"spring\.cloud\.stream\.bindings\.([^.]+)\.destination\s*=",
+                # Topic config
+                r'@TopicConfig\s*\(\s*name\s*=\s*"([^"]+)"',
             },
         )
 
