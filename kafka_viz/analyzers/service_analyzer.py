@@ -179,11 +179,74 @@ class ServiceAnalyzer:
         pass
 
     def get_services_by_language(self, language: str) -> Dict[str, Service]:
-        """Get services filtered by programming language."""
-        # This requires services to be discovered first
-        pass
+        """Get services filtered by programming language.
+    
+         Args:
+            language: Programming language to filter by (e.g., 'java', 'python')
+        
+        Returns:
+            Dict[str, Service]: Dictionary of services that use the specified language
+        
+        Note:
+            This requires services to be discovered first using find_services()
+        """
+        if not hasattr(self, '_discovered_services'):
+            logger.warning("No services discovered yet. Call find_services() first.")
+            return {}
+    
+        return {
+            name: service 
+            for name, service in self._discovered_services.items() 
+            if service.language.lower() == language.lower()
+        }
 
     def get_services_with_schema(self, schema_name: str) -> Dict[str, Service]:
-        """Get services that use a specific schema."""
-        # This requires schema analysis to be implemented first
-        pass
+        """Get services that use a specific schema.
+        
+        Args:
+            schema_name: Name of the schema to search for (e.g., 'UserEvent.avsc')
+            
+        Returns:
+            Dict[str, Service]: Dictionary of services that use the specified schema
+            
+        Note:
+            This requires services to be discovered first using find_services()
+        """
+        if not hasattr(self, '_discovered_services'):
+            logger.warning("No services discovered yet. Call find_services() first.")
+            return {}
+
+        matching_services = {}
+        
+        for name, service in self._discovered_services.items():
+            # Look for schema files in common schema locations
+            schema_locations = [
+                service.root_path / "src/main/avro",
+                service.root_path / "src/main/resources/avro",
+                service.root_path / "schemas",
+                service.root_path / "avro"
+            ]
+            
+            # Check source files for schema references
+            schema_pattern = re.compile(
+                rf'(?:Schema|@AvroGenerated|schemaReference)\s*[=:]\s*["\'].*{re.escape(schema_name)}["\']'
+            )
+            
+            # Check if schema file exists in any location
+            schema_exists = any(
+                loc.exists() and any(f.name == schema_name for f in loc.glob("*.avsc"))
+                for loc in schema_locations
+            )
+            
+            # Check if schema is referenced in source files
+            schema_referenced = any(
+                schema_pattern.search(source_file.read_text())
+                for source_file in service.source_files
+                if source_file.exists()
+            )
+            
+            if schema_exists or schema_referenced:
+                matching_services[name] = service
+        
+        return matching_services
+
