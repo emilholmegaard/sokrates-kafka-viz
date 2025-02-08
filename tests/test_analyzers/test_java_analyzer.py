@@ -125,7 +125,7 @@ def test_topic_constants(analyzer, test_service, tmp_path):
     content = """
     public class KafkaConfig {
         private static final String ORDER_TOPIC = "orders";
-        private static final String PROCESSED_TOPIC = "processed-orders";       
+        private static final String PROCESSED_TOPIC = "processed-orders";
         public void process() {
             producer.send(ORDER_TOPIC, "data");
             consumer.subscribe(Arrays.asList(PROCESSED_TOPIC));
