@@ -1,7 +1,7 @@
 """
 Service collection model.
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, Iterator
 from pathlib import Path
 
 from .service import Service
@@ -10,7 +10,7 @@ from .service import Service
 class ServiceCollection:
     """Collection of microservices."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an empty service collection."""
         self.services: Dict[str, Service] = {}
 
@@ -58,7 +58,7 @@ class ServiceCollection:
         """Check if service exists in collection."""
         return name in self.services
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Service]:
         """Iterate over services."""
         return iter(self.services.values())
 
@@ -66,4 +66,5 @@ class ServiceCollection:
         return f"ServiceCollection({len(self)} services)"
 
     def __repr__(self) -> str:
+        """Get detailed string representation."""
         return str(self)
