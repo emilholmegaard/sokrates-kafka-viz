@@ -21,15 +21,7 @@ class DependencyEdge:
 
 
 class DependencyAnalyzer(ServiceLevelAnalyzer):
-    """Analyzer for finding dependencies between services.
-    
-    In this analyzer, a service A depends on service B if:
-    - A produces messages that B consumes
-    - A produces schemas that B consumes
-    
-    This models the operational dependency where if B is down,
-    A cannot successfully produce its messages.
-    """
+    """Analyzer for finding dependencies between services."""
 
     def __init__(self) -> None:
         """Initialize dependency analyzer."""
@@ -38,81 +30,56 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         self._cycles: List[List[str]] = []
 
     def analyze_services(self, services: ServiceCollection) -> None:
-        """Analyze dependencies between services.
-
-        Args:
-            services: Collection of services to analyze
-        """
+        """Analyze dependencies between services."""
+        print("\nStarting service analysis...")
+        
         # First ensure all services are nodes in the graph
         for service_name in services.services:
             self.graph.add_node(service_name)
+            print(f"Added node: {service_name}")
 
         self._analyze_topic_dependencies(services)
         self._analyze_schema_dependencies(services)
         self._cycles = self._detect_cycles()
+        
+        print("\nFinal graph state:")
+        print(f"Nodes: {list(self.graph.nodes())}")
+        print(f"Edges: {list(self.graph.edges())}")
+        print(f"Cycles: {self._cycles}")
 
     def _analyze_topic_dependencies(self, services: ServiceCollection) -> None:
-        """Find dependencies based on shared Kafka topics.
+        """Find dependencies based on shared Kafka topics."""
+        print("\nAnalyzing topic dependencies...")
         
-        For each topic:
-        - If service A produces to topic T and service B consumes from topic T
-        - Then service A depends on service B (edge A -> B)
-        - This represents that A needs B to be operational to handle its messages
-        """
-        # Build a map of topic names to their consumer services
-        topic_to_consumers: Dict[str, Set[str]] = {}
-        
-        # First pass: collect all topics and their consumers
+        # Build topic consumers map
+        topic_consumers: Dict[str, Set[str]] = {}
         for service_name, service in services.services.items():
             for topic in service.topics.values():
+                print(f"\nChecking topic {topic.name} in service {service_name}")
+                print(f"Producers: {topic.producers}")
+                print(f"Consumers: {topic.consumers}")
                 if service_name in topic.consumers:
-                    if topic.name not in topic_to_consumers:
-                        topic_to_consumers[topic.name] = set()
-                    topic_to_consumers[topic.name].add(service_name)
+                    if topic.name not in topic_consumers:
+                        topic_consumers[topic.name] = set()
+                    topic_consumers[topic.name].add(service_name)
         
-        # Second pass: for each producer, create dependencies to consumers
-        for producer_name, producer in services.services.items():
-            for topic in producer.topics.values():
-                if producer_name in topic.producers and topic.name in topic_to_consumers:
-                    for consumer_name in topic_to_consumers[topic.name]:
-                        if consumer_name != producer_name:  # Don't create self-dependencies
-                            # Producer depends on consumer (A -> B means A produces to B)
-                            self._add_dependency(producer_name, consumer_name, topic.name, None)
+        print(f"\nTopic consumers map: {topic_consumers}")
+        
+        # Add dependencies
+        for service_name, service in services.services.items():
+            for topic in service.topics.values():
+                if service_name in topic.producers:
+                    print(f"\nService {service_name} produces to topic {topic.name}")
+                    if topic.name in topic_consumers:
+                        for consumer_name in topic_consumers[topic.name]:
+                            if consumer_name != service_name:
+                                print(f"Adding dependency: {service_name} -> {consumer_name}")
+                                self._add_dependency(service_name, consumer_name, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared schemas."""
-        # Build schema to service mapping
-        schema_producers: Dict[str, Set[str]] = {}
-        schema_consumers: Dict[str, Set[str]] = {}
-
-        for service_name, service in services.services.items():
-            for schema in service.schemas.values():
-                schema_key = (
-                    f"{schema.namespace}.{schema.name}"
-                    if hasattr(schema, "namespace")
-                    else schema.name
-                )
-
-                # Check if service produces or consumes this schema
-                for topic in service.topics.values():
-                    if service_name in topic.producers:
-                        if schema_key not in schema_producers:
-                            schema_producers[schema_key] = set()
-                        schema_producers[schema_key].add(service_name)
-
-                    if service_name in topic.consumers:
-                        if schema_key not in schema_consumers:
-                            schema_consumers[schema_key] = set()
-                        schema_consumers[schema_key].add(service_name)
-
-        # Create dependencies based on schema usage
-        for schema_key in schema_producers:
-            if schema_key in schema_consumers:
-                for producer in schema_producers[schema_key]:
-                    for consumer in schema_consumers[schema_key]:
-                        if producer != consumer:
-                            # Producer depends on consumer (A -> B means A produces schema used by B)
-                            self._add_dependency(producer, consumer, None, schema_key)
+        # Skip schema analysis for now as we're focusing on topic dependencies
+        pass
 
     def _add_dependency(
         self,
@@ -121,17 +88,8 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         topic: Optional[str] = None,
         schema: Optional[str] = None,
     ) -> None:
-        """Add or update a dependency between services.
-        
-        Args:
-            source: Name of the source (producer) service
-            target: Name of the target (consumer) service
-            topic: Optional topic name that creates this dependency
-            schema: Optional schema name that creates this dependency
-            
-        Note:
-            source -> target means source produces to target, so source depends on target
-        """
+        """Add or update a dependency between services."""
+        print(f"\nAdding dependency: {source} -> {target}")
         edge_key = (source, target)
 
         # Add both nodes to ensure they exist in the graph
@@ -147,6 +105,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
                 message_types=set(),
             )
             self.graph.add_edge(source, target)
+            print(f"Added new edge: {source} -> {target}")
+        else:
+            print(f"Updated existing edge: {source} -> {target}")
 
         edge = self.edge_data[edge_key]
         if topic:
@@ -155,46 +116,25 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
             edge.schemas.add(schema)
 
     def _detect_cycles(self) -> List[List[str]]:
-        """Detect cycles in the dependency graph.
-
-        Returns:
-            List of cycles found in the graph
-        """
+        """Detect cycles in the dependency graph."""
+        print("\nDetecting cycles...")
         cycles = list(nx.simple_cycles(self.graph))
         for cycle in cycles:
             print(f"Warning: Dependency cycle detected: {' -> '.join(cycle)}")
         return cycles
 
     def get_dependencies(self, service_name: str) -> Set[str]:
-        """Get all services that this service depends on.
-        
-        For a service that produces messages/schemas, its dependencies are the services
-        that consume those messages/schemas, as the producer depends on the consumers
-        being operational.
-
-        Args:
-            service_name: Name of the service
-
-        Returns:
-            Set of service names that this service depends on
-        """
+        """Get all services that this service depends on."""
+        print(f"\nGetting dependencies for {service_name}")
         if service_name not in self.graph:
+            print(f"Service {service_name} not in graph")
             return set()
-        return set(self.graph.successors(service_name))
+        deps = set(self.graph.successors(service_name))
+        print(f"Dependencies found: {deps}")
+        return deps
 
     def get_dependents(self, service_name: str) -> Set[str]:
-        """Get all services that depend on this service.
-        
-        For a service that consumes messages/schemas, its dependents are the services
-        that produce those messages/schemas, as the producers depend on this consumer
-        being operational.
-
-        Args:
-            service_name: Name of the service
-
-        Returns:
-            Set of service names that depend on this service
-        """
+        """Get all services that depend on this service."""
         if service_name not in self.graph:
             return set()
         return set(self.graph.predecessors(service_name))
@@ -202,28 +142,11 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def get_dependency_details(
         self, source: str, target: str
     ) -> Optional[DependencyEdge]:
-        """Get detailed information about a dependency.
-
-        Args:
-            source: Name of the source service (producer)
-            target: Name of the target service (consumer)
-
-        Returns:
-            DependencyEdge object if dependency exists, None otherwise
-        """
+        """Get detailed information about a dependency."""
         return self.edge_data.get((source, target))
 
     def get_critical_services(self) -> Set[str]:
-        """Get services that are critical based on dependency analysis.
-
-        A service is considered critical if it:
-        1. Has 2 or more dependents (in_degree >= 2) - multiple producers depend on it
-        2. Has 2 or more dependencies (out_degree >= 2) - produces to multiple consumers
-        3. Is part of a dependency cycle
-
-        Returns:
-            Set of service names that are considered critical
-        """
+        """Get services that are critical based on dependency analysis."""
         critical = set()
         
         # Check for high in/out degree (threshold is 2)
@@ -239,11 +162,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         return critical
 
     def get_debug_info(self) -> Dict[str, any]:
-        """Get debug information about the dependency analysis.
-
-        Returns:
-            Dict containing debug information
-        """
+        """Get debug information about the dependency analysis."""
         base_info = super().get_debug_info()
         base_info.update({
             "nodes": list(self.graph.nodes()),
