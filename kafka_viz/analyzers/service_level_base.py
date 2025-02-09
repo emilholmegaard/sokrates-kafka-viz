@@ -1,12 +1,13 @@
 """Base class for service-level analyzers."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, Dict
 
 from ..models.service_collection import ServiceCollection
+from .base_analyzer import BaseAnalyzer
 
 
-class ServiceLevelAnalyzer(ABC):
+class ServiceLevelAnalyzer(BaseAnalyzer):
     """Base class for analyzers that work on the entire service collection."""
 
     @abstractmethod

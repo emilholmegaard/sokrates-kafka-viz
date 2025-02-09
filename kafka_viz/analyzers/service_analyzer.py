@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from ..models.service import Service
+from .base_analyzer import BaseAnalyzer
 from .service_name_extractors import (
     CSharpServiceNameExtractor,
     JavaScriptServiceNameExtractor,
@@ -17,7 +18,7 @@ from .service_name_extractors import (
 logger = logging.getLogger(__name__)
 
 
-class ServiceAnalyzer:
+class ServiceAnalyzer(BaseAnalyzer):
     """Analyzer for detecting and analyzing microservices."""
 
     def __init__(self) -> None:

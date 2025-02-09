@@ -11,11 +11,12 @@ import javalang
 import requests
 
 from ..models.schema import AvroSchema
+from .base_analyzer import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
 
 
-class AvroAnalyzer:
+class AvroAnalyzer(BaseAnalyzer):
     """Analyzer for Avro schemas and related code."""
 
     def __init__(self) -> None:

@@ -5,12 +5,12 @@ from typing import Any, Dict
 
 from kafka_viz.models import KafkaTopic, Service
 
-from .base import BaseAnalyzer, KafkaPatterns
+from .analyzer import Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
 
-class KafkaAnalyzer(BaseAnalyzer):
+class KafkaAnalyzer(Analyzer):
     """Analyzer for finding Kafka usage patterns in code."""
 
     def __init__(self):

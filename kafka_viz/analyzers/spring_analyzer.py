@@ -3,10 +3,10 @@
 from pathlib import Path
 from typing import Any, Dict
 
-from .base import BaseAnalyzer, KafkaPatterns
+from .analyzer import Analyzer, KafkaPatterns
 
 
-class SpringCloudStreamAnalyzer(BaseAnalyzer):
+class SpringCloudStreamAnalyzer(Analyzer):
     """Spring Cloud Stream specific analyzer that works alongside the main Kafka analyzer."""
 
     def __init__(self):

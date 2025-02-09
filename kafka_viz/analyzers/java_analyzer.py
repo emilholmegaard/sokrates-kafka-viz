@@ -5,12 +5,12 @@ from typing import Any, Dict
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
-from .base import BaseAnalyzer, KafkaPatterns
+from .analyzer import Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
 
-class JavaAnalyzer(BaseAnalyzer):
+class JavaAnalyzer(Analyzer):
     """Analyzer for Java source files containing Kafka patterns."""
 
     def __init__(self) -> None:

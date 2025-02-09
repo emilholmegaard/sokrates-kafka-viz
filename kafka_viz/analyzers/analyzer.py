@@ -5,6 +5,7 @@ from typing import Any, Dict, NamedTuple, Optional, Set
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
+from .base_analyzer import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class KafkaPatterns:
         return any(p.search(content) for p in self._compiled_ignore)
 
 
-class BaseAnalyzer:
+class Analyzer(BaseAnalyzer):
     """Base class for Kafka topic analyzers."""
 
     def __init__(self):
