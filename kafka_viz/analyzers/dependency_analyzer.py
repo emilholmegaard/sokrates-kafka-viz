@@ -44,22 +44,31 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         self._cycles = self._detect_cycles()
 
     def _analyze_topic_dependencies(self, services: ServiceCollection) -> None:
-        """Find dependencies based on shared Kafka topics."""
-        # First build a topic to consumers mapping
-        topic_consumers: Dict[str, Set[str]] = {}
+        """Find dependencies based on shared Kafka topics.
+        
+        For each topic:
+        - If service A produces to topic T and service B consumes from topic T
+        - Then service A depends on service B (edge A -> B)
+        """
+        # Build a map of topic names to their consumer services
+        topic_to_consumers: Dict[str, Set[str]] = {}
+        
+        # First pass: collect all topics and their consumers
         for service_name, service in services.services.items():
             for topic in service.topics.values():
+                if topic.name not in topic_to_consumers:
+                    topic_to_consumers[topic.name] = set()
                 if service_name in topic.consumers:
-                    if topic.name not in topic_consumers:
-                        topic_consumers[topic.name] = set()
-                    topic_consumers[topic.name].add(service_name)
-
-        # Then check each producer against the known consumers
+                    topic_to_consumers[topic.name].add(service_name)
+        
+        # Second pass: for each producer, create dependencies to consumers
         for service_name, service in services.services.items():
             for topic in service.topics.values():
-                if service_name in topic.producers and topic.name in topic_consumers:
-                    for consumer in topic_consumers[topic.name]:
+                if service_name in topic.producers:  # If this service produces the topic
+                    # Find all consumers of this topic
+                    for consumer in topic_to_consumers[topic.name]:
                         if consumer != service_name:  # Don't create self-dependencies
+                            # Producer depends on consumer: producer -> consumer edge
                             self._add_dependency(service_name, consumer, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
@@ -94,6 +103,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
                 for producer in schema_producers[schema_key]:
                     for consumer in schema_consumers[schema_key]:
                         if producer != consumer:
+                            # Producer depends on consumer: producer -> consumer edge
                             self._add_dependency(producer, consumer, None, schema_key)
 
     def _add_dependency(
@@ -103,7 +113,14 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         topic: Optional[str] = None,
         schema: Optional[str] = None,
     ) -> None:
-        """Add or update a dependency between services."""
+        """Add or update a dependency between services.
+        
+        Args:
+            source: Name of the source (producer) service
+            target: Name of the target (consumer) service
+            topic: Optional topic name that creates this dependency
+            schema: Optional schema name that creates this dependency
+        """
         edge_key = (source, target)
 
         # Add both nodes to ensure they exist in the graph
@@ -139,6 +156,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
 
     def get_dependencies(self, service_name: str) -> Set[str]:
         """Get all services that this service depends on.
+        
+        For a service that produces messages, its dependencies are the services
+        that consume those messages.
 
         Args:
             service_name: Name of the service
@@ -152,6 +172,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
 
     def get_dependents(self, service_name: str) -> Set[str]:
         """Get all services that depend on this service.
+        
+        For a service that consumes messages, its dependents are the services
+        that produce those messages.
 
         Args:
             service_name: Name of the service
@@ -190,7 +213,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """
         critical = set()
         
-        # Check for high in/out degree (reduced threshold to 2)
+        # Check for high in/out degree (threshold is 2)
         for service in self.graph.nodes():
             if (self.graph.in_degree(service) >= 2 or 
                 self.graph.out_degree(service) >= 2):
