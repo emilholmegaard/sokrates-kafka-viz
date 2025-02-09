@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ServiceAnalyzer:
     """Analyzer for detecting and analyzing microservices."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize service analyzer with language-specific patterns."""
         self.build_patterns = {
             "java": ["pom.xml", "build.gradle", "build.gradle.kts"],

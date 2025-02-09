@@ -1,3 +1,15 @@
-from .java_analyzer import JavaAnalyzer
+from .service_name_extractors import (
+    CSharpServiceNameExtractor,
+    JavaScriptServiceNameExtractor,
+    JavaServiceNameExtractor,
+    PythonServiceNameExtractor,
+    ServiceNameExtractor,
+)
 
-__all__ = ["JavaAnalyzer"]
+__all__ = [
+    "ServiceNameExtractor",
+    "JavaServiceNameExtractor",
+    "JavaScriptServiceNameExtractor",
+    "PythonServiceNameExtractor",
+    "CSharpServiceNameExtractor",
+]
