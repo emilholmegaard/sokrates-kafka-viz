@@ -21,7 +21,15 @@ class DependencyEdge:
 
 
 class DependencyAnalyzer(ServiceLevelAnalyzer):
-    """Analyzer for finding dependencies between services."""
+    """Analyzer for finding dependencies between services.
+    
+    In this analyzer, a service A depends on service B if:
+    - A produces messages that B consumes
+    - A produces schemas that B consumes
+    
+    This models the operational dependency where if B is down,
+    A cannot successfully produce its messages.
+    """
 
     def __init__(self) -> None:
         """Initialize dependency analyzer."""
@@ -49,6 +57,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         For each topic:
         - If service A produces to topic T and service B consumes from topic T
         - Then service A depends on service B (edge A -> B)
+        - This represents that A needs B to be operational to handle its messages
         """
         # Build a map of topic names to their consumer services
         topic_to_consumers: Dict[str, Set[str]] = {}
@@ -56,20 +65,19 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         # First pass: collect all topics and their consumers
         for service_name, service in services.services.items():
             for topic in service.topics.values():
-                if topic.name not in topic_to_consumers:
-                    topic_to_consumers[topic.name] = set()
                 if service_name in topic.consumers:
+                    if topic.name not in topic_to_consumers:
+                        topic_to_consumers[topic.name] = set()
                     topic_to_consumers[topic.name].add(service_name)
         
         # Second pass: for each producer, create dependencies to consumers
-        for service_name, service in services.services.items():
-            for topic in service.topics.values():
-                if service_name in topic.producers:  # If this service produces the topic
-                    # Find all consumers of this topic
-                    for consumer in topic_to_consumers[topic.name]:
-                        if consumer != service_name:  # Don't create self-dependencies
-                            # Producer depends on consumer: producer -> consumer edge
-                            self._add_dependency(service_name, consumer, topic.name, None)
+        for producer_name, producer in services.services.items():
+            for topic in producer.topics.values():
+                if producer_name in topic.producers and topic.name in topic_to_consumers:
+                    for consumer_name in topic_to_consumers[topic.name]:
+                        if consumer_name != producer_name:  # Don't create self-dependencies
+                            # Producer depends on consumer (A -> B means A produces to B)
+                            self._add_dependency(producer_name, consumer_name, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared schemas."""
@@ -103,7 +111,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
                 for producer in schema_producers[schema_key]:
                     for consumer in schema_consumers[schema_key]:
                         if producer != consumer:
-                            # Producer depends on consumer: producer -> consumer edge
+                            # Producer depends on consumer (A -> B means A produces schema used by B)
                             self._add_dependency(producer, consumer, None, schema_key)
 
     def _add_dependency(
@@ -120,6 +128,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
             target: Name of the target (consumer) service
             topic: Optional topic name that creates this dependency
             schema: Optional schema name that creates this dependency
+            
+        Note:
+            source -> target means source produces to target, so source depends on target
         """
         edge_key = (source, target)
 
@@ -157,8 +168,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def get_dependencies(self, service_name: str) -> Set[str]:
         """Get all services that this service depends on.
         
-        For a service that produces messages, its dependencies are the services
-        that consume those messages.
+        For a service that produces messages/schemas, its dependencies are the services
+        that consume those messages/schemas, as the producer depends on the consumers
+        being operational.
 
         Args:
             service_name: Name of the service
@@ -173,8 +185,9 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def get_dependents(self, service_name: str) -> Set[str]:
         """Get all services that depend on this service.
         
-        For a service that consumes messages, its dependents are the services
-        that produce those messages.
+        For a service that consumes messages/schemas, its dependents are the services
+        that produce those messages/schemas, as the producers depend on this consumer
+        being operational.
 
         Args:
             service_name: Name of the service
@@ -192,8 +205,8 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Get detailed information about a dependency.
 
         Args:
-            source: Name of the source service
-            target: Name of the target service
+            source: Name of the source service (producer)
+            target: Name of the target service (consumer)
 
         Returns:
             DependencyEdge object if dependency exists, None otherwise
@@ -204,8 +217,8 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Get services that are critical based on dependency analysis.
 
         A service is considered critical if it:
-        1. Has 2 or more dependents (in_degree >= 2)
-        2. Has 2 or more dependencies (out_degree >= 2)
+        1. Has 2 or more dependents (in_degree >= 2) - multiple producers depend on it
+        2. Has 2 or more dependencies (out_degree >= 2) - produces to multiple consumers
         3. Is part of a dependency cycle
 
         Returns:
