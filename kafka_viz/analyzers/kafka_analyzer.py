@@ -1,7 +1,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 from kafka_viz.models import KafkaTopic, Service
 
@@ -206,3 +206,16 @@ class KafkaAnalyzer(BaseAnalyzer):
                 process_match(match, False)
 
         return topics
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the dependency analysis."""
+        base_info = super().get_debug_info()
+        base_info.update(
+            {
+                "nodes": list(self.graph.nodes()),
+                "edges": list(self.graph.edges()),
+                "cycles": self._cycles,
+                "critical_services": list(self.get_critical_services()),
+            }
+        )
+        return base_info

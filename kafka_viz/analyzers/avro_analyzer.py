@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
 import javalang
@@ -280,3 +280,16 @@ class AvroAnalyzer:
                 return f"{base_type}<{','.join(arg_types)}>"
 
         return "object"
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the Avro analysis."""
+        base_info = super().get_debug_info()
+        base_info.update(
+            {
+                "patterns": self.patterns,
+                "schemas": [
+                    schema.name for schema in self.analyze_directory(Path("."))
+                ],
+            }
+        )
+        return base_info

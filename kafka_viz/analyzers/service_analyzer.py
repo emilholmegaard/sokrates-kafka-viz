@@ -253,12 +253,8 @@ class ServiceAnalyzer:
         return matching_services
 
     def get_debug_info(self) -> Dict[str, Any]:
-        """Override base debug info with service-specific information."""
-        debug_info = super().get_debug_info()
-        debug_info.update(
-            {
-                "discovered_services": len(self._discovered_services),
-                "supported_languages": list(self.build_patterns.keys()),
-            }
-        )
-        return debug_info
+        """Get debug information about the service analyzer."""
+        return {
+            "discovered_services": len(self._discovered_services),
+            "supported_languages": list(self.build_patterns.keys()),
+        }
