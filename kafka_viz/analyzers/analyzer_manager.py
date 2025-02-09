@@ -18,7 +18,7 @@ from .spring_analyzer import SpringCloudStreamAnalyzer
 class AnalyzerManager:
     """Manages and coordinates different analyzers."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Define analyzer order based on dependencies
         self.service_analyzer = ServiceAnalyzer()  # Must run first to discover services
         self.schema_analyzer = AvroAnalyzer()  # Should run before Kafka analysis
@@ -43,7 +43,7 @@ class AnalyzerManager:
             services.add_service(service)
         return services
 
-    def analyze_schemas(self, service: Service):
+    def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
         schemas = self.schema_analyzer.analyze_directory(service.root_path)
         service.schemas.update(schemas)
@@ -77,7 +77,9 @@ class AnalyzerManager:
             try:
                 analyzer.analyze_services(services)
             except Exception as e:
-                print(f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}")
+                print(
+                    f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}"
+                )
 
     def generate_output(
         self, services: ServiceCollection, include_debug: bool = False
@@ -122,7 +124,7 @@ class AnalyzerManager:
         services: ServiceCollection,
         output_path: Path,
         include_debug: bool = False,
-    ):
+    ) -> None:
         """Generate and save analysis results to a JSON file."""
         result = self.generate_output(services, include_debug)
         with open(output_path, "w") as f:
