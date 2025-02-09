@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from ..models.service import Service
 from .service_name_extractors import (
@@ -39,7 +39,7 @@ class ServiceAnalyzer:
             {}
         )  # Service name to Service object mapping
 
-    def find_services(self, source_dir: str) -> Dict[str, Service]:
+    def find_services(self, source_dir: Path) -> Dict[str, Service]:
         """Find all microservices in the given source directory.
 
         Args:
@@ -251,3 +251,14 @@ class ServiceAnalyzer:
                 matching_services[name] = service
 
         return matching_services
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Override base debug info with service-specific information."""
+        debug_info = super().get_debug_info()
+        debug_info.update(
+            {
+                "discovered_services": len(self._discovered_services),
+                "supported_languages": list(self.build_patterns.keys()),
+            }
+        )
+        return debug_info
