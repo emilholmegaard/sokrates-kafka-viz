@@ -27,6 +27,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Initialize dependency analyzer."""
         self.graph = nx.DiGraph()
         self.edge_data: Dict[Tuple[str, str], DependencyEdge] = {}
+        self._cycles: List[List[str]] = []
 
     def analyze_services(self, services: ServiceCollection) -> None:
         """Analyze dependencies between services.
@@ -34,9 +35,13 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         Args:
             services: Collection of services to analyze
         """
+        # First ensure all services are nodes in the graph
+        for service_name in services.services:
+            self.graph.add_node(service_name)
+
         self._analyze_topic_dependencies(services)
         self._analyze_schema_dependencies(services)
-        self._detect_cycles()
+        self._cycles = self._detect_cycles()
 
     def _analyze_topic_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared Kafka topics."""
@@ -93,6 +98,10 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     ) -> None:
         """Add or update a dependency between services."""
         edge_key = (source, target)
+
+        # Add both nodes to ensure they exist in the graph
+        self.graph.add_node(source)
+        self.graph.add_node(target)
 
         if edge_key not in self.edge_data:
             self.edge_data[edge_key] = DependencyEdge(
@@ -164,19 +173,26 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def get_critical_services(self) -> Set[str]:
         """Get services that are critical based on dependency analysis.
 
+        A service is considered critical if it:
+        1. Has 3 or more dependents (in_degree >= 3)
+        2. Has 3 or more dependencies (out_degree >= 3)
+        3. Is part of a dependency cycle
+
         Returns:
             Set of service names that are considered critical
         """
-        in_degree = dict(self.graph.in_degree())
-        out_degree = dict(self.graph.out_degree())
-
         critical = set()
+        
+        # Check for high in/out degree
         for service in self.graph.nodes():
-            # Consider a service critical if it has many dependents
-            # or is part of a dependency cycle
-            if in_degree.get(service, 0) >= 3 or out_degree.get(service, 0) >= 3:
+            if (self.graph.in_degree(service) >= 3 or 
+                self.graph.out_degree(service) >= 3):
                 critical.add(service)
-
+        
+        # Add services in cycles
+        for cycle in self._cycles:
+            critical.update(cycle)
+        
         return critical
 
     def get_debug_info(self) -> Dict[str, any]:
@@ -189,6 +205,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         base_info.update({
             "nodes": list(self.graph.nodes()),
             "edges": list(self.graph.edges()),
+            "cycles": self._cycles,
             "critical_services": list(self.get_critical_services()),
         })
         return base_info
