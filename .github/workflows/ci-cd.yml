@@ -14,21 +14,23 @@ jobs:
         python-version: [3.8, 3.9, "3.10"]
     
     services:
+      zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+          - 2181:2181
+
       kafka:
         image: wurstmeister/kafka:2.13-2.6.0
         ports:
           - 9092:9092
         env:
           KAFKA_ADVERTISED_HOST_NAME: localhost
-          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-          
-      zookeeper:
-        image: wurstmeister/zookeeper
-        ports:
-          - 2181:2181
-
+          KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+          KAFKA_CREATE_TOPICS: "test:1:1"
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -53,7 +55,7 @@ jobs:
         python -m pytest tests/ --cov=kafka_viz --cov-report=xml --cov-report=term-missing
         
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         
@@ -71,7 +73,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -88,7 +90,7 @@ jobs:
         python -m build
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/
