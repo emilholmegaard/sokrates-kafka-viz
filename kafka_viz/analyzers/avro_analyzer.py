@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class AvroAnalyzer:
     """Analyzer for Avro schemas and related code."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Avro analyzer with detection patterns."""
         self.patterns = {
             "avro_annotation": r"@org\.apache\.avro\.specific\.AvroGenerated",
@@ -283,13 +283,7 @@ class AvroAnalyzer:
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the Avro analysis."""
-        base_info = super().get_debug_info()
-        base_info.update(
-            {
-                "patterns": self.patterns,
-                "schemas": [
-                    schema.name for schema in self.analyze_directory(Path("."))
-                ],
-            }
-        )
-        return base_info
+        return {
+            "patterns": self.patterns,
+            "schemas": list(self.analyze_directory(Path(".")).keys()),
+        }

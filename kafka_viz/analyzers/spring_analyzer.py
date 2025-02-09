@@ -1,6 +1,7 @@
 """Spring Cloud Stream specific analyzer."""
 
 from pathlib import Path
+from typing import Any, Dict
 
 from .base import BaseAnalyzer, KafkaPatterns
 
@@ -26,7 +27,7 @@ class SpringCloudStreamAnalyzer(BaseAnalyzer):
         """Check if file is a Spring Cloud Stream source file or config."""
         return file_path.suffix.lower() == ".java"
 
-    def get_debug_info(self) -> dict:
+    def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information specific to Spring Cloud Stream analysis."""
         base_info = super().get_debug_info()
         base_info.update(
