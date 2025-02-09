@@ -30,7 +30,7 @@ jobs:
           KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
         
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -55,7 +55,7 @@ jobs:
         python -m pytest tests/ --cov=kafka_viz --cov-report=xml --cov-report=term-missing
         
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         
@@ -73,7 +73,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -90,7 +90,7 @@ jobs:
         python -m build
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/
