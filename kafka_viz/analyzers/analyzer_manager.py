@@ -18,17 +18,21 @@ from .spring_analyzer import SpringCloudStreamAnalyzer
 class AnalyzerManager:
     """Manages and coordinates different analyzers."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Define analyzer order based on dependencies
         self.service_analyzer = ServiceAnalyzer()  # Must run first to discover services
         self.schema_analyzer = AvroAnalyzer()  # Should run before Kafka analysis
 
-        # Other analyzers can run in any order
-        self.code_analyzers = [
+        # File-level analyzers
+        self.file_analyzers = [
             JavaAnalyzer(),
             KafkaAnalyzer(),
-            DependencyAnalyzer(),
             SpringCloudStreamAnalyzer(),
+        ]
+
+        # Service-level analyzers that work on the entire service collection
+        self.service_level_analyzers = [
+            DependencyAnalyzer(),
         ]
 
     def discover_services(self, source_dir: Path) -> ServiceCollection:
@@ -39,7 +43,7 @@ class AnalyzerManager:
             services.add_service(service)
         return services
 
-    def analyze_schemas(self, service: Service):
+    def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
         schemas = self.schema_analyzer.analyze_directory(service.root_path)
         service.schemas.update(schemas)
@@ -47,10 +51,10 @@ class AnalyzerManager:
     def analyze_file(
         self, file_path: Path, service: Service
     ) -> Optional[Dict[str, KafkaTopic]]:
-        """Analyze a file using all available code analyzers."""
+        """Analyze a file using all available file-level analyzers."""
         all_topics = {}
 
-        for analyzer in self.code_analyzers:
+        for analyzer in self.file_analyzers:
             try:
                 topics = analyzer.analyze(file_path, service)
                 if topics:
@@ -66,6 +70,16 @@ class AnalyzerManager:
                 print(f"Error in analyzer {analyzer.__class__.__name__}: {e}")
 
         return all_topics if all_topics else None
+
+    def analyze_service_dependencies(self, services: ServiceCollection) -> None:
+        """Run all service-level analyzers on the service collection."""
+        for analyzer in self.service_level_analyzers:
+            try:
+                analyzer.analyze_services(services)
+            except Exception as e:
+                print(
+                    f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}"
+                )
 
     def generate_output(
         self, services: ServiceCollection, include_debug: bool = False
@@ -110,7 +124,7 @@ class AnalyzerManager:
         services: ServiceCollection,
         output_path: Path,
         include_debug: bool = False,
-    ):
+    ) -> None:
         """Generate and save analysis results to a JSON file."""
         result = self.generate_output(services, include_debug)
         with open(output_path, "w") as f:
@@ -118,5 +132,9 @@ class AnalyzerManager:
 
     def get_debug_info(self) -> List[Dict[str, Any]]:
         """Get debug information from all analyzers."""
-        analyzers = [self.service_analyzer, self.schema_analyzer] + self.code_analyzers
-        return [analyzer.get_debug_info() for analyzer in analyzers]
+        all_analyzers = (
+            [self.service_analyzer, self.schema_analyzer]
+            + self.file_analyzers
+            + self.service_level_analyzers
+        )
+        return [analyzer.get_debug_info() for analyzer in all_analyzers]

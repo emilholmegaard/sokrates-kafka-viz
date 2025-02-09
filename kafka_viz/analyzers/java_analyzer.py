@@ -1,16 +1,16 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
-from .base import BaseAnalyzer, KafkaPatterns
+from .analyzer import Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
 
-class JavaAnalyzer(BaseAnalyzer):
+class JavaAnalyzer(Analyzer):
     """Analyzer for Java source files containing Kafka patterns."""
 
     def __init__(self) -> None:
@@ -192,3 +192,14 @@ class JavaAnalyzer(BaseAnalyzer):
         """Analyze a Java file for Kafka topics."""
         service = Service(name=file_path.parent.name, path=file_path.parent)
         return self.analyze(file_path, service)
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the Java analyzer."""
+        base_info = super().get_debug_info()
+        base_info.update(
+            {
+                "topics": list(self.topics.keys()),
+                "constant_map": self.constant_map,
+            }
+        )
+        return base_info

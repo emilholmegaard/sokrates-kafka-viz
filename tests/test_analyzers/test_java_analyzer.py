@@ -9,7 +9,7 @@ from kafka_viz.models import Service
 
 
 @pytest.fixture
-def analyzer():
+def analyzer() -> JavaAnalyzer:
     return JavaAnalyzer()
 
 
@@ -18,14 +18,14 @@ def test_service():
     return Service("test-service", Path("/tmp/test"))
 
 
-def test_can_analyze(analyzer):
+def test_can_analyze(analyzer) -> None:
     """Test file extension detection."""
     assert analyzer.can_analyze(Path("test.java"))
     assert not analyzer.can_analyze(Path("test.py"))
     assert not analyzer.can_analyze(Path("test.cs"))
 
 
-def test_plain_kafka_producer(analyzer, test_service, tmp_path):
+def test_plain_kafka_producer(analyzer, test_service, tmp_path) -> None:
     """Test detection of plain Kafka producer patterns."""
     content = """
     public class OrderProducer {
@@ -49,7 +49,7 @@ def test_plain_kafka_producer(analyzer, test_service, tmp_path):
     assert not topics["orders"].consumers
 
 
-def test_plain_kafka_consumer(analyzer, test_service, tmp_path):
+def test_plain_kafka_consumer(analyzer, test_service, tmp_path) -> None:
     """Test detection of plain Kafka consumer patterns."""
     content = """
     public class OrderConsumer {
@@ -70,7 +70,7 @@ def test_plain_kafka_consumer(analyzer, test_service, tmp_path):
     assert not topics["orders"].producers
 
 
-def test_spring_kafka_annotations(analyzer, test_service, tmp_path):
+def test_spring_kafka_annotations(analyzer, test_service, tmp_path) -> None:
     """Test detection of Spring Kafka annotations."""
     content = """
     @Service
@@ -95,7 +95,7 @@ def test_spring_kafka_annotations(analyzer, test_service, tmp_path):
     assert test_service.name in topics["processed-orders"].producers
 
 
-def test_spring_cloud_stream_annotations(analyzer, test_service, tmp_path):
+def test_spring_cloud_stream_annotations(analyzer, test_service, tmp_path) -> None:
     """Test detection of Spring Cloud Stream annotations."""
     content = """
     @EnableBinding(Processor.class)
@@ -120,7 +120,7 @@ def test_spring_cloud_stream_annotations(analyzer, test_service, tmp_path):
     assert test_service.name in topics["processed-orders"].producers
 
 
-def test_topic_constants(analyzer, test_service, tmp_path):
+def test_topic_constants(analyzer, test_service, tmp_path) -> None:
     """Test detection of topic constants and variables."""
     content = """
     public class KafkaConfig {
@@ -145,7 +145,7 @@ def test_topic_constants(analyzer, test_service, tmp_path):
     assert test_service.name in topics["processed-orders"].consumers
 
 
-def test_spring_config_topics(analyzer, test_service, tmp_path):
+def test_spring_config_topics(analyzer, test_service, tmp_path) -> None:
     """Test detection of Spring configuration properties."""
     content = """
     @Configuration
@@ -169,7 +169,7 @@ def test_spring_config_topics(analyzer, test_service, tmp_path):
     assert len(topics) > 0
 
 
-def test_multi_topic_declaration(analyzer, test_service, tmp_path):
+def test_multi_topic_declaration(analyzer, test_service, tmp_path) -> None:
     """Test detection of multi-topic declarations."""
     content = """
     @Service

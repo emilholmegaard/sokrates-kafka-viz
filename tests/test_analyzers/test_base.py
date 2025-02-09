@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from kafka_viz.analyzers.base import BaseAnalyzer, KafkaPatterns
+from kafka_viz.analyzers.analyzer import Analyzer, KafkaPatterns
 from kafka_viz.models.service import Service
 
 
-class SimpleTestAnalyzer(BaseAnalyzer):
+class SimpleTestAnalyzer(Analyzer):
     def __init__(self):
         super().__init__()
         self.patterns = KafkaPatterns(

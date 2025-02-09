@@ -1,10 +1,11 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict, NamedTuple, Optional, Set
+from typing import Any, Dict, NamedTuple, Optional, Set
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
+from .base_analyzer import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class KafkaPatterns:
         return any(p.search(content) for p in self._compiled_ignore)
 
 
-class BaseAnalyzer:
+class Analyzer(BaseAnalyzer):
     """Base class for Kafka topic analyzers."""
 
     def __init__(self):
@@ -184,3 +185,11 @@ class BaseAnalyzer:
                 service.topics[topic_name].consumers.update(topic.consumers)
 
         return topics
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information from the analyzer.
+
+        Returns:
+            Dictionary containing debug information about the analyzer's state
+        """
+        return {"analyzer_type": self.__class__.__name__, "status": "active"}

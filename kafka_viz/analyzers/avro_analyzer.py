@@ -4,21 +4,22 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
 import javalang
 import requests
 
 from ..models.schema import AvroSchema
+from .base_analyzer import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
 
 
-class AvroAnalyzer:
+class AvroAnalyzer(BaseAnalyzer):
     """Analyzer for Avro schemas and related code."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Avro analyzer with detection patterns."""
         self.patterns = {
             "avro_annotation": r"@org\.apache\.avro\.specific\.AvroGenerated",
@@ -280,3 +281,10 @@ class AvroAnalyzer:
                 return f"{base_type}<{','.join(arg_types)}>"
 
         return "object"
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the Avro analysis."""
+        return {
+            "patterns": self.patterns,
+            "schemas": list(self.analyze_directory(Path(".")).keys()),
+        }

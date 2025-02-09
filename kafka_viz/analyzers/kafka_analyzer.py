@@ -1,20 +1,21 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 from kafka_viz.models import KafkaTopic, Service
 
-from .base import BaseAnalyzer, KafkaPatterns
+from .analyzer import Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
 
-class KafkaAnalyzer(BaseAnalyzer):
+class KafkaAnalyzer(Analyzer):
     """Analyzer for finding Kafka usage patterns in code."""
 
     def __init__(self):
         super().__init__()
+        self.analyzed_files = set()
         # Define regex patterns for Kafka usage
         self.patterns = KafkaPatterns(
             producers={
@@ -154,15 +155,8 @@ class KafkaAnalyzer(BaseAnalyzer):
         return service.topics
 
     def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
-        """Analyze Java file for Kafka patterns.
-
-        Args:
-            file_path: Path to Java file
-            service: Service to analyze
-
-        Returns:
-            Dict[str, KafkaTopic]: Dictionary of topics found
-        """
+        """Analyze Java file for Kafka patterns."""
+        self.analyzed_files.add(file_path)
         content = file_path.read_text()
 
         # First pass: collect topic variables/constants
@@ -206,3 +200,18 @@ class KafkaAnalyzer(BaseAnalyzer):
                 process_match(match, False)
 
         return topics
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the Kafka analysis."""
+        base_info = super().get_debug_info()
+        base_info.update(
+            {
+                "patterns": {
+                    "producers": list(self.patterns.producers),
+                    "consumers": list(self.patterns.consumers),
+                    "topic_configs": list(self.patterns.topic_configs),
+                },
+                "analyzed_files": [str(file) for file in self.analyzed_files],
+            }
+        )
+        return base_info
