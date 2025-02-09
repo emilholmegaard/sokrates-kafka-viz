@@ -14,19 +14,21 @@ jobs:
         python-version: [3.8, 3.9, "3.10"]
     
     services:
+      zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+          - 2181:2181
+
       kafka:
         image: wurstmeister/kafka:2.13-2.6.0
         ports:
           - 9092:9092
         env:
           KAFKA_ADVERTISED_HOST_NAME: localhost
-          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-          
-      zookeeper:
-        image: wurstmeister/zookeeper
-        ports:
-          - 2181:2181
-
+          KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+          KAFKA_CREATE_TOPICS: "test:1:1"
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        
     steps:
     - uses: actions/checkout@v3
     
