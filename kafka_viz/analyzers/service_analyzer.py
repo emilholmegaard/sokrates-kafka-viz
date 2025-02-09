@@ -35,7 +35,9 @@ class ServiceAnalyzer:
             "csharp": CSharpServiceNameExtractor(),
         }
         self.test_dirs = {"test", "tests", "src/test", "src/tests"}
-        self._discovered_services = {}
+        self._discovered_services: Dict[str, Service] = (
+            {}
+        )  # Service name to Service object mapping
 
     def find_services(self, source_dir: str) -> Dict[str, Service]:
         """Find all microservices in the given source directory.
