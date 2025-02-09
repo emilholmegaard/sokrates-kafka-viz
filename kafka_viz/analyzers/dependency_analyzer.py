@@ -1,7 +1,7 @@
 """Analyzer for service dependencies based on Kafka topics and schemas."""
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
@@ -167,7 +167,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
 
         return critical
 
-    def get_debug_info(self) -> Dict[str, any]:
+    def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the dependency analysis."""
         base_info = super().get_debug_info()
         base_info.update(
