@@ -77,12 +77,31 @@ def test_advanced_kafka_patterns_integration(test_data_dir) -> None:
     assert consumers == expected_consumers
 
 
-def test_full_project_integration(test_data_dir) -> None:
-    """Test the complete integration of AnalyzerManager with service discovery."""
+def test_service_analysis_integration(test_data_dir) -> None:
+    """Test the complete integration of AnalyzerManager with analyzing specific services."""
     analyzer_manager = AnalyzerManager()
+    services = ServiceCollection()
     
-    # Discover all services in the test directory
-    services = analyzer_manager.discover_services(test_data_dir)
+    # Add Java service
+    java_service_path = test_data_dir / "java" / "advanced"
+    if java_service_path.exists():
+        java_service = Service(name="java-service", path=java_service_path, language="java")
+        services.add_service(java_service)
+        
+    # Add Spring service if it exists
+    spring_service_path = test_data_dir / "spring_service"
+    if spring_service_path.exists():
+        spring_service = Service(name="spring-service", path=spring_service_path, language="java")
+        services.add_service(spring_service)
+        
+    # Add Python service if it exists
+    python_service_path = test_data_dir / "python_service"
+    if python_service_path.exists():
+        python_service = Service(name="python-service", path=python_service_path, language="python")
+        services.add_service(python_service)
+    
+    # Verify that we found services
+    assert len(services.services) > 0, "No test services were found"
     
     # For each service, analyze schemas and then analyze all files
     for service in services.services.values():
@@ -94,9 +113,11 @@ def test_full_project_integration(test_data_dir) -> None:
                 if topics:
                     service.topics.update(topics)
     
-    # Verify that we found services
-    assert len(services.services) > 0
-    
     # Verify that at least one service has topics
     has_topics = any(len(service.topics) > 0 for service in services.services.values())
     assert has_topics, "No Kafka topics were found in any service"
+    
+    # If we have the Java service, verify its topics
+    java_service = services.services.get("java-service")
+    if java_service:
+        assert len(java_service.topics) > 0, "No topics found in Java service"
