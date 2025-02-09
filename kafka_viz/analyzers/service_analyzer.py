@@ -3,11 +3,16 @@
 import json
 import logging
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from ..models.service import Service
+from .service_name_extractors import (
+    CSharpServiceNameExtractor,
+    JavaScriptServiceNameExtractor,
+    JavaServiceNameExtractor,
+    PythonServiceNameExtractor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ServiceAnalyzer:
     """Analyzer for detecting and analyzing microservices."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize service analyzer with language-specific patterns."""
         self.build_patterns = {
             "java": ["pom.xml", "build.gradle", "build.gradle.kts"],
@@ -23,7 +28,16 @@ class ServiceAnalyzer:
             "python": ["pyproject.toml", "setup.py", "requirements.txt"],
             "csharp": [".csproj"],
         }
+        self.name_extractors = {
+            "java": JavaServiceNameExtractor(),
+            "javascript": JavaScriptServiceNameExtractor(),
+            "python": PythonServiceNameExtractor(),
+            "csharp": CSharpServiceNameExtractor(),
+        }
         self.test_dirs = {"test", "tests", "src/test", "src/tests"}
+        self._discovered_services: Dict[str, Service] = (
+            {}
+        )  # Service name to Service object mapping
 
     def find_services(self, source_dir: str) -> Dict[str, Service]:
         """Find all microservices in the given source directory.
@@ -37,18 +51,28 @@ class ServiceAnalyzer:
         root_path = Path(source_dir)
         services = {}
 
+        # Track processed directories to avoid duplicate services
+        processed_dirs: Set[Path] = set()
+
         # Walk through all directories
         for path in root_path.rglob("*"):
-            # Skip test directories unless explicitly included
-            if any(test_dir in str(path) for test_dir in self.test_dirs):
+            if not path.is_dir() or path in processed_dirs:
+                continue
+
+            # Skip test directories only if they are at the root level
+            parent_is_root = path.parent == root_path
+            if parent_is_root and path.name in self.test_dirs:
                 continue
 
             service = self._detect_service(path)
             if service:
                 services[service.name] = service
+                processed_dirs.add(path)
+                # Add all parent directories to processed to avoid duplicate detection
+                processed_dirs.update(path.parents)
 
         logger.debug(f"Found {len(services)} services in {root_path}")
-
+        self._discovered_services = services
         return services
 
     def _detect_service(self, path: Path) -> Optional[Service]:
@@ -56,91 +80,57 @@ class ServiceAnalyzer:
         if not path.is_dir():
             return None
 
-        logger.debug(f"Found {len(self.build_patterns)} services in {path}")
         for language, patterns in self.build_patterns.items():
-
             for pattern in patterns:
                 build_file = path / pattern
                 if build_file.exists():
                     name = self._extract_service_name(build_file, language)
-
                     if name:
-                        logger.debug(f"Found {name} as potential name in {pattern}")
-                        # Create service
-                        service = Service(
-                            name=name,
-                            root_path=path,
-                            language=language,
-                            build_file=build_file,
+                        logger.debug(
+                            f"Found service '{name}' ({language}) in {build_file}"
                         )
-
-                        # Collect source files based on language
-                        extensions = {
-                            "java": [".java", ".kt", ".scala"],
-                            "javascript": [".js", ".ts"],
-                            "python": [".py"],
-                            "csharp": [".cs"],
-                        }
-
-                        # Get all source files with matching extensions
-                        for ext in extensions.get(language, []):
-                            for source_file in path.rglob(f"*{ext}"):
-                                # Skip test files
-                                if not any(
-                                    test_dir in str(source_file.relative_to(path))
-                                    for test_dir in self.test_dirs
-                                ):
-                                    service.source_files.add(source_file)
-
-                        return service
+                        return self._create_service(path, name, language, build_file)
         return None
+
+    def _create_service(
+        self, path: Path, name: str, language: str, build_file: Path
+    ) -> Service:
+        """Create a Service object and collect its source files."""
+        service = Service(
+            name=name,
+            root_path=path,
+            language=language,
+            build_file=build_file,
+        )
+
+        extensions = {
+            "java": [".java", ".kt", ".scala"],
+            "javascript": [".js", ".ts"],
+            "python": [".py"],
+            "csharp": [".cs"],
+        }
+
+        for ext in extensions.get(language, []):
+            for source_file in path.rglob(f"*{ext}"):
+                relative_path = source_file.relative_to(path)
+                is_test_file = any(
+                    str(relative_path).startswith(test_dir)
+                    for test_dir in self.test_dirs
+                )
+                if not is_test_file:
+                    service.source_files.add(source_file)
+
+        return service
 
     def _extract_service_name(self, build_file: Path, language: str) -> Optional[str]:
         """Extract service name from build file based on language."""
         try:
-            if language == "java":
-                if build_file.name == "pom.xml":
-                    tree = ET.parse(build_file)
-                    root = tree.getroot()
-                    # Handle XML namespaces in pom.xml
-                    ns = {"maven": "http://maven.apache.org/POM/4.0.0"}
-                    artifact_id = root.find(".//maven:artifactId", ns)
-                    return artifact_id.text if artifact_id is not None else None
-                else:
-                    # For Gradle, use directory name as fallback
-                    return build_file.parent.name
-
-            elif language == "javascript":
-                with open(build_file) as f:
-                    package_data = json.load(f)
-                    return package_data.get("name")
-
-            elif language == "python":
-                if build_file.name == "pyproject.toml":
-                    import tomli
-
-                    with open(build_file, "rb") as f:
-                        data = tomli.load(f)
-                        return data.get("tool", {}).get("poetry", {}).get(
-                            "name"
-                        ) or data.get("project", {}).get("name")
-                else:
-                    # For requirements.txt or setup.py, use directory name
-                    return build_file.parent.name
-
-            elif language == "csharp":
-                tree = ET.parse(build_file)
-                root = tree.getroot()
-                assembly_name = root.find(".//AssemblyName")
-                return (
-                    assembly_name.text if assembly_name is not None else build_file.stem
-                )
-
+            extractor = self.name_extractors.get(language)
+            if extractor:
+                return extractor.extract(build_file)
         except Exception as e:
-            print(f"Error extracting service name from {build_file}: {e}")
-            # Fallback to directory name
+            logger.warning(f"Error extracting service name from {build_file}: {e}")
             return build_file.parent.name
-
         return None
 
     def _analyze_java_service(self, service: Service) -> None:
@@ -187,8 +177,7 @@ class ServiceAnalyzer:
 
     def get_service_by_name(self, service_name: str) -> Optional[Service]:
         """Get a service by its name."""
-        # This requires services to be discovered first
-        pass
+        return self._discovered_services.get(service_name)
 
     def get_services_by_language(self, language: str) -> Dict[str, Service]:
         """Get services filtered by programming language.
@@ -202,7 +191,7 @@ class ServiceAnalyzer:
         Note:
             This requires services to be discovered first using find_services()
         """
-        if not hasattr(self, "_discovered_services"):
+        if not self._discovered_services:
             logger.warning("No services discovered yet. Call find_services() first.")
             return {}
 
@@ -224,7 +213,7 @@ class ServiceAnalyzer:
         Note:
             This requires services to be discovered first using find_services()
         """
-        if not hasattr(self, "_discovered_services"):
+        if not self._discovered_services:
             logger.warning("No services discovered yet. Call find_services() first.")
             return {}
 
