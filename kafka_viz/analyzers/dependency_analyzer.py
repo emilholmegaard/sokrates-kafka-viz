@@ -51,30 +51,20 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Find dependencies based on shared Kafka topics."""
         print("\nAnalyzing topic dependencies...")
         
-        # Build topic consumers map
-        topic_consumers: Dict[str, Set[str]] = {}
+        # First find all topics and their producers/consumers
         for service_name, service in services.services.items():
+            print(f"\nAnalyzing topics for {service_name}:")
             for topic in service.topics.values():
-                print(f"\nChecking topic {topic.name} in service {service_name}")
-                print(f"Producers: {topic.producers}")
-                print(f"Consumers: {topic.consumers}")
-                if service_name in topic.consumers:
-                    if topic.name not in topic_consumers:
-                        topic_consumers[topic.name] = set()
-                    topic_consumers[topic.name].add(service_name)
-        
-        print(f"\nTopic consumers map: {topic_consumers}")
-        
-        # Add dependencies
-        for service_name, service in services.services.items():
-            for topic in service.topics.values():
+                print(f"Topic {topic.name}:")
+                print(f"  Producers: {topic.producers}")
+                print(f"  Consumers: {topic.consumers}")
+                
+                # If this service is a producer, add dependencies to all consumers
                 if service_name in topic.producers:
-                    print(f"\nService {service_name} produces to topic {topic.name}")
-                    if topic.name in topic_consumers:
-                        for consumer_name in topic_consumers[topic.name]:
-                            if consumer_name != service_name:
-                                print(f"Adding dependency: {service_name} -> {consumer_name}")
-                                self._add_dependency(service_name, consumer_name, topic.name, None)
+                    for consumer in topic.consumers:
+                        if consumer != service_name:  # Don't create self-dependencies
+                            print(f"  Adding dependency: {service_name} -> {consumer}")
+                            self._add_dependency(service_name, consumer, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared schemas."""
