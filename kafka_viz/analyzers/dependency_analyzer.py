@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import networkx as nx
 
 from ..models.service_collection import ServiceCollection
+from .service_level_base import ServiceLevelAnalyzer
 
 
 @dataclass
@@ -19,7 +20,7 @@ class DependencyEdge:
     message_types: Set[str]
 
 
-class DependencyAnalyzer:
+class DependencyAnalyzer(ServiceLevelAnalyzer):
     """Analyzer for finding dependencies between services."""
 
     def __init__(self) -> None:
@@ -177,3 +178,17 @@ class DependencyAnalyzer:
                 critical.add(service)
 
         return critical
+
+    def get_debug_info(self) -> Dict[str, any]:
+        """Get debug information about the dependency analysis.
+
+        Returns:
+            Dict containing debug information
+        """
+        base_info = super().get_debug_info()
+        base_info.update({
+            "nodes": list(self.graph.nodes()),
+            "edges": list(self.graph.edges()),
+            "critical_services": list(self.get_critical_services()),
+        })
+        return base_info
