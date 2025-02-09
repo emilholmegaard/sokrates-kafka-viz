@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import networkx as nx
 
 from ..models.service_collection import ServiceCollection
+from ..models.schema import KafkaTopic
 from .service_level_base import ServiceLevelAnalyzer
 
 
@@ -51,20 +52,31 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Find dependencies based on shared Kafka topics."""
         print("\nAnalyzing topic dependencies...")
         
-        # First find all topics and their producers/consumers
-        for service_name, service in services.services.items():
-            print(f"\nAnalyzing topics for {service_name}:")
+        # First consolidate topic information across services
+        topic_info: Dict[str, KafkaTopic] = {}
+        
+        # First pass: collect all topic information
+        for service in services.services.values():
             for topic in service.topics.values():
-                print(f"Topic {topic.name}:")
-                print(f"  Producers: {topic.producers}")
-                print(f"  Consumers: {topic.consumers}")
-                
-                # If this service is a producer, add dependencies to all consumers
-                if service_name in topic.producers:
-                    for consumer in topic.consumers:
-                        if consumer != service_name:  # Don't create self-dependencies
-                            print(f"  Adding dependency: {service_name} -> {consumer}")
-                            self._add_dependency(service_name, consumer, topic.name, None)
+                if topic.name not in topic_info:
+                    topic_info[topic.name] = KafkaTopic(topic.name)
+                # Merge producers and consumers
+                topic_info[topic.name].producers.update(topic.producers)
+                topic_info[topic.name].consumers.update(topic.consumers)
+        
+        print("\nConsolidated topic information:")
+        for topic_name, topic in topic_info.items():
+            print(f"Topic {topic_name}:")
+            print(f"  Producers: {topic.producers}")
+            print(f"  Consumers: {topic.consumers}")
+        
+        # Second pass: create dependencies based on consolidated topic information
+        for topic in topic_info.values():
+            for producer in topic.producers:
+                for consumer in topic.consumers:
+                    if producer != consumer:  # Don't create self-dependencies
+                        print(f"Adding dependency: {producer} -> {consumer} via topic {topic.name}")
+                        self._add_dependency(producer, consumer, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared schemas."""
