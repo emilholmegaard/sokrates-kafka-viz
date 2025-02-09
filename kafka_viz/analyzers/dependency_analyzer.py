@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
-from ..models.service_collection import ServiceCollection
 from ..models.schema import KafkaTopic
+from ..models.service_collection import ServiceCollection
 from .service_level_base import ServiceLevelAnalyzer
 
 
@@ -33,7 +33,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def analyze_services(self, services: ServiceCollection) -> None:
         """Analyze dependencies between services."""
         print("\nStarting service analysis...")
-        
+
         # First ensure all services are nodes in the graph
         for service_name in services.services:
             self.graph.add_node(service_name)
@@ -42,7 +42,7 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         self._analyze_topic_dependencies(services)
         self._analyze_schema_dependencies(services)
         self._cycles = self._detect_cycles()
-        
+
         print("\nFinal graph state:")
         print(f"Nodes: {list(self.graph.nodes())}")
         print(f"Edges: {list(self.graph.edges())}")
@@ -51,10 +51,10 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def _analyze_topic_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared Kafka topics."""
         print("\nAnalyzing topic dependencies...")
-        
+
         # First consolidate topic information across services
         topic_info: Dict[str, KafkaTopic] = {}
-        
+
         # First pass: collect all topic information
         for service in services.services.values():
             for topic in service.topics.values():
@@ -63,19 +63,21 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
                 # Merge producers and consumers
                 topic_info[topic.name].producers.update(topic.producers)
                 topic_info[topic.name].consumers.update(topic.consumers)
-        
+
         print("\nConsolidated topic information:")
         for topic_name, topic in topic_info.items():
             print(f"Topic {topic_name}:")
             print(f"  Producers: {topic.producers}")
             print(f"  Consumers: {topic.consumers}")
-        
+
         # Second pass: create dependencies based on consolidated topic information
         for topic in topic_info.values():
             for producer in topic.producers:
                 for consumer in topic.consumers:
                     if producer != consumer:  # Don't create self-dependencies
-                        print(f"Adding dependency: {producer} -> {consumer} via topic {topic.name}")
+                        print(
+                            f"Adding dependency: {producer} -> {consumer} via topic {topic.name}"
+                        )
                         self._add_dependency(producer, consumer, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
@@ -150,26 +152,30 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
     def get_critical_services(self) -> Set[str]:
         """Get services that are critical based on dependency analysis."""
         critical = set()
-        
+
         # Check for high in/out degree (threshold is 2)
         for service in self.graph.nodes():
-            if (self.graph.in_degree(service) >= 2 or 
-                self.graph.out_degree(service) >= 2):
+            if (
+                self.graph.in_degree(service) >= 2
+                or self.graph.out_degree(service) >= 2
+            ):
                 critical.add(service)
-        
+
         # Add services in cycles
         for cycle in self._cycles:
             critical.update(cycle)
-        
+
         return critical
 
     def get_debug_info(self) -> Dict[str, any]:
         """Get debug information about the dependency analysis."""
         base_info = super().get_debug_info()
-        base_info.update({
-            "nodes": list(self.graph.nodes()),
-            "edges": list(self.graph.edges()),
-            "cycles": self._cycles,
-            "critical_services": list(self.get_critical_services()),
-        })
+        base_info.update(
+            {
+                "nodes": list(self.graph.nodes()),
+                "edges": list(self.graph.edges()),
+                "cycles": self._cycles,
+                "critical_services": list(self.get_critical_services()),
+            }
+        )
         return base_info

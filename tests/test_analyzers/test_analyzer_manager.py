@@ -9,14 +9,14 @@ from kafka_viz.models.service_collection import ServiceCollection
 
 class TestAnalyzerManager:
     @pytest.fixture
-    def analyzer_manager(self):
+    def analyzer_manager(self) -> AnalyzerManager:
         return AnalyzerManager()
 
     @pytest.fixture
     def mock_service(self):
         return Service(Path("/mock/path"), "java")
 
-    def test_discover_services_java(self, analyzer_manager, tmp_path):
+    def test_discover_services_java(self, analyzer_manager, tmp_path) -> None:
         # Create mock Java service structure
         services = ServiceCollection()
         service_dir = tmp_path / "java-service"
@@ -53,7 +53,7 @@ class TestAnalyzerManager:
         assert service.language == "java"
         assert len(service.source_files) == 1
 
-    def test_discover_services_python(self, analyzer_manager, tmp_path):
+    def test_discover_services_python(self, analyzer_manager, tmp_path) -> None:
         # Create mock Python service structure
         services = ServiceCollection()
         service_dir = tmp_path / "python-service"
@@ -88,7 +88,7 @@ class TestAnalyzerManager:
         assert service.language == "python"
         assert len(service.source_files) == 1
 
-    def test_analyze_schemas(self, analyzer_manager, mock_service, tmp_path):
+    def test_analyze_schemas(self, analyzer_manager, mock_service, tmp_path) -> None:
         # Create mock Avro schema file
         schema_dir = tmp_path / "schemas"
         schema_dir.mkdir()
@@ -110,7 +110,7 @@ class TestAnalyzerManager:
         analyzer_manager.analyze_schemas(mock_service)
         assert len(mock_service.schemas) > 0
 
-    def test_analyze_file(self, analyzer_manager, mock_service, tmp_path):
+    def test_analyze_file(self, analyzer_manager, mock_service, tmp_path) -> None:
         # Create mock Java file with Kafka annotations
         test_file = tmp_path / "TestConsumer.java"
         test_file.write_text(
@@ -125,7 +125,7 @@ class TestAnalyzerManager:
         assert topics is not None
         assert "test-topic" in topics
 
-    def test_generate_output(self, analyzer_manager):
+    def test_generate_output(self, analyzer_manager) -> None:
         services = ServiceCollection()
         service = Service(Path("/test"), "java")
 
@@ -145,13 +145,13 @@ class TestAnalyzerManager:
         assert "services" in output
         assert len(output["services"]) == 1
 
-    def test_save_output(self, analyzer_manager, tmp_path):
+    def test_save_output(self, analyzer_manager, tmp_path) -> None:
         services = ServiceCollection()
         output_file = tmp_path / "output.json"
         analyzer_manager.save_output(services, output_file)
         assert output_file.exists()
 
-    def test_error_handling(self, analyzer_manager, mock_service, tmp_path):
+    def test_error_handling(self, analyzer_manager, mock_service, tmp_path) -> None:
         # Test with invalid file
         invalid_file = tmp_path / "invalid.txt"
         invalid_file.write_text("invalid content")
