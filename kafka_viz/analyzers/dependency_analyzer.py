@@ -45,15 +45,22 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
 
     def _analyze_topic_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared Kafka topics."""
-        for producer_name, producer in services.services.items():
-            for topic in producer.topics.values():
-                if producer_name in topic.producers:
-                    # Find consumers of this topic
-                    for consumer_name, consumer in services.services.items():
-                        if consumer_name in topic.consumers:
-                            self._add_dependency(
-                                producer_name, consumer_name, topic.name, None
-                            )
+        # First build a topic to consumers mapping
+        topic_consumers: Dict[str, Set[str]] = {}
+        for service_name, service in services.services.items():
+            for topic in service.topics.values():
+                if service_name in topic.consumers:
+                    if topic.name not in topic_consumers:
+                        topic_consumers[topic.name] = set()
+                    topic_consumers[topic.name].add(service_name)
+
+        # Then check each producer against the known consumers
+        for service_name, service in services.services.items():
+            for topic in service.topics.values():
+                if service_name in topic.producers and topic.name in topic_consumers:
+                    for consumer in topic_consumers[topic.name]:
+                        if consumer != service_name:  # Don't create self-dependencies
+                            self._add_dependency(service_name, consumer, topic.name, None)
 
     def _analyze_schema_dependencies(self, services: ServiceCollection) -> None:
         """Find dependencies based on shared schemas."""
@@ -174,8 +181,8 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """Get services that are critical based on dependency analysis.
 
         A service is considered critical if it:
-        1. Has 3 or more dependents (in_degree >= 3)
-        2. Has 3 or more dependencies (out_degree >= 3)
+        1. Has 2 or more dependents (in_degree >= 2)
+        2. Has 2 or more dependencies (out_degree >= 2)
         3. Is part of a dependency cycle
 
         Returns:
@@ -183,10 +190,10 @@ class DependencyAnalyzer(ServiceLevelAnalyzer):
         """
         critical = set()
         
-        # Check for high in/out degree
+        # Check for high in/out degree (reduced threshold to 2)
         for service in self.graph.nodes():
-            if (self.graph.in_degree(service) >= 3 or 
-                self.graph.out_degree(service) >= 3):
+            if (self.graph.in_degree(service) >= 2 or 
+                self.graph.out_degree(service) >= 2):
                 critical.add(service)
         
         # Add services in cycles
