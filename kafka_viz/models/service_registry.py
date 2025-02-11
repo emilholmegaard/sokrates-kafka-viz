@@ -1,7 +1,7 @@
 """Service Registry for centralized service management."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -22,16 +22,15 @@ class ServiceRelationship:
 @dataclass
 class AnalysisResult:
     """Container for analysis results from analyzers."""
-    topics: Dict[str, KafkaTopic]
-    discovered_services: Dict[str, Service]
-    service_relationships: List[ServiceRelationship]
     affected_service: str
-
-    def __init__(self, affected_service: str):
-        self.topics = {}
-        self.discovered_services = {}
-        self.service_relationships = []
-        self.affected_service = affected_service
+    topics: Dict[str, KafkaTopic] = field(default_factory=dict)
+    discovered_services: Dict[str, Service] = field(default_factory=dict)
+    service_relationships: List[ServiceRelationship] = field(default_factory=list)
+    
+    def add_relationship(self, source: str, target: str, type_: str, details: Optional[Dict] = None) -> None:
+        """Helper method to add a relationship."""
+        relationship = ServiceRelationship(source, target, type_, details)
+        self.service_relationships.append(relationship)
 
 class ServiceRegistry:
     """Centralized registry for managing services and their relationships."""
@@ -82,7 +81,7 @@ class ServiceRegistry:
             return self._relationships
         return [r for r in self._relationships if r.source == service_name or r.target == service_name]
 
-    def apply_analysis_result(self, result: AnalysisResult) -> None:
+    def apply_analysis_result(self, result: "AnalysisResult") -> None:
         """Apply analysis results to the registry."""
         # Update or create the affected service
         service = self.get_or_create_service(result.affected_service)
@@ -98,7 +97,8 @@ class ServiceRegistry:
 
         # Register discovered services
         for svc_name, svc in result.discovered_services.items():
-            self.register_service(svc)
+            if svc_name != result.affected_service:  # Don't register self as discovered
+                self.register_service(svc)
 
         # Add relationships
         for rel in result.service_relationships:
@@ -118,3 +118,11 @@ class ServiceRegistry:
     def get_service_dependents(self, service_name: str) -> Set[str]:
         """Get all services that depend on the given service."""
         return {r.source for r in self._relationships if r.target == service_name}
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the registry."""
+        return {
+            "num_services": len(self._services),
+            "num_relationships": len(self._relationships),
+            "relationship_types": list(set(r.type for r in self._relationships))
+        }
