@@ -40,21 +40,34 @@ class AnalyzerManager:
             DependencyAnalyzer(),
         ]
 
-    def discover_services(self, source_dir: Path) -> None:
+    def discover_services(self, source_dir: Path) -> ServiceCollection:
         """First pass: Discover all services in the source directory."""
         self.logger.info(f"Starting service discovery in {source_dir}")
-        discovered_services = self.service_analyzer.find_services(source_dir)
-        self.logger.debug(f"Initially discovered {len(discovered_services)} services")
+        analysis_result = self.service_analyzer.find_services(source_dir)
+        self.logger.debug(f"Initially discovered {len(analysis_result.discovered_services)} services")
 
-        for service_name, service in discovered_services.items():
+        # Register discovered services with the registry
+        for service in analysis_result.discovered_services.values():
             self.logger.debug(
-                f"Adding service: {service_name} at path {service.root_path}"
+                f"Adding service: {service.name} at path {service.root_path}"
             )
             self.service_registry.register_service(service)
+
+        # Register relationships found during discovery
+        for relationship in analysis_result.service_relationships:
+            self.service_registry.add_relationship(
+                relationship.source,
+                relationship.target,
+                relationship.type,
+                relationship.details
+            )
 
         self.logger.info(
             f"Completed service discovery. Found {len(self.service_registry.services)} services"
         )
+        
+        # Convert registry to ServiceCollection for backward compatibility
+        return self.service_registry.to_service_collection()
 
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
@@ -71,24 +84,30 @@ class AnalyzerManager:
             service.schemas.update(schemas)
 
     def analyze_file(
-        self, file_path: Path, service_name: str
-    ) -> None:
+        self, file_path: Path, service: Service
+    ) -> Optional[Dict[str, KafkaTopic]]:
         """Analyze a file using all available file-level analyzers."""
         self.logger.debug(f"Analyzing file: {file_path}")
-        service = self.service_registry.get_or_create_service(service_name)
+        all_topics = {}
 
         for analyzer in self.file_analyzers:
             try:
                 result = analyzer.analyze(file_path, service)
-                if result.topics or result.discovered_services or result.service_relationships:
+                if result.topics:
                     self.logger.debug(
-                        f"Analyzer {analyzer.__class__.__name__} found results in {file_path}"
+                        f"Analyzer {analyzer.__class__.__name__} found topics in {file_path}"
                     )
-                    self.service_registry.apply_analysis_result(result)
+                    all_topics.update(result.topics)
+                
+                # Apply the analysis result to the registry
+                self.service_registry.apply_analysis_result(result)
+                    
             except Exception as e:
                 self.logger.warning(
                     f"Error in analyzer {analyzer.__class__.__name__} for file {file_path}: {e}"
                 )
+
+        return all_topics if all_topics else None
 
     def analyze_service_dependencies(self) -> None:
         """Run all service-level analyzers on the service collection."""
