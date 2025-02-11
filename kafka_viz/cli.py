@@ -1,5 +1,3 @@
-"""Command-line interface for Kafka visualization tool."""
-
 import json
 import logging
 from pathlib import Path
@@ -42,6 +40,7 @@ def is_source_file(file_path: Path) -> bool:
     # Skip common binary and non-source directories
     SKIP_DIRS = {
         "node_modules",
+        "_sokrates",
         "target",
         "build",
         "dist",
@@ -82,6 +81,9 @@ def analyze(
         handlers=[logging.StreamHandler()],
     )
     logger = logging.getLogger("kafka_viz")
+    logger.info(f"Starting analysis of {source_dir}")
+    logger.debug(f"Output will be written to {output}")
+    logger.debug(f"Include tests: {include_tests}")
 
     try:
         # Initialize analyzer manager
@@ -93,12 +95,25 @@ def analyze(
             services = analyzer_manager.discover_services(source_dir)
             progress.remove_task(task)
 
+            if not services.services:
+                logger.warning("No services were discovered in the source directory")
+                raise typer.Exit(1)
+
+            logger.info(f"Discovered {len(services.services)} services")
+            for service_name in services.services:
+                logger.debug(f"Found service: {service_name}")
+
             # Second pass: analyze schemas
             task = progress.add_task(
                 "Analyzing schemas...", total=len(services.services)
             )
-            for service in services.services.values():
+            for service_name, service in services.services.items():
+                logger.debug(f"Analyzing schemas for service: {service_name}")
                 analyzer_manager.analyze_schemas(service)
+                if service.schemas:
+                    logger.debug(
+                        f"Found {len(service.schemas)} schemas in {service_name}"
+                    )
                 progress.advance(task)
             progress.remove_task(task)
 
@@ -106,24 +121,61 @@ def analyze(
             task = progress.add_task(
                 "Analyzing source files...", total=len(services.services)
             )
-            for service in services.services.values():
+            for service_name, service in services.services.items():
+                logger.debug(
+                    f"Starting source file analysis for service: {service_name}"
+                )
+                files_analyzed = 0
+                topics_found = 0
+
                 for file_path in service.root_path.rglob("*"):
                     if file_path.is_file() and is_source_file(file_path):
+                        files_analyzed += 1
                         try:
                             topics = analyzer_manager.analyze_file(file_path, service)
                             if topics:
                                 service.topics.update(topics)
+                                topics_found += len(topics)
+                                logger.debug(
+                                    f"Found {len(topics)} topics in {file_path.relative_to(service.root_path)}"
+                                )
                         except Exception as e:
                             if verbose:
                                 logger.warning(f"Error analyzing file {file_path}: {e}")
+
+                logger.debug(
+                    f"Service {service_name} analysis complete: "
+                    f"analyzed {files_analyzed} files, "
+                    f"found {topics_found} topics"
+                )
                 progress.advance(task)
 
         # Save analysis results
+        logger.info("Saving analysis results...")
         analyzer_manager.save_output(services, output, include_debug=verbose)
-        console.print(f"\n[green]Analysis complete! Results written to {output}")
+
+        # Print summary
+        console.print(
+            f"\
+[green]Analysis complete! Results written to {output}"
+        )
+        console.print(
+            "\
+Analysis Summary:"
+        )
+        console.print(f"- Total services analyzed: {len(services.services)}")
+        total_topics = sum(
+            len(service.topics) for service in services.services.values()
+        )
+        total_schemas = sum(
+            len(service.schemas) for service in services.services.values()
+        )
+        console.print(f"- Total topics found: {total_topics}")
+        console.print(f"- Total schemas found: {total_schemas}")
 
     except Exception as e:
         console.print(f"[red]Error during analysis: {e}")
+        logger.exception("Analysis failed with error")
         raise typer.Exit(1)
 
 
