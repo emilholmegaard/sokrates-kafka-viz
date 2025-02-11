@@ -3,11 +3,12 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
 from ..models.service_collection import ServiceCollection
+from ..models.service_registry import ServiceRegistry, AnalysisResult
 from .avro_analyzer import AvroAnalyzer
 from .dependency_analyzer import DependencyAnalyzer
 from .java_analyzer import JavaAnalyzer
@@ -21,6 +22,8 @@ class AnalyzerManager:
 
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
+        self.service_registry = ServiceRegistry()
+
         # Define analyzer order based on dependencies
         self.service_analyzer = ServiceAnalyzer()  # Must run first to discover services
         self.schema_analyzer = AvroAnalyzer()  # Should run before Kafka analysis
@@ -37,10 +40,9 @@ class AnalyzerManager:
             DependencyAnalyzer(),
         ]
 
-    def discover_services(self, source_dir: Path) -> ServiceCollection:
+    def discover_services(self, source_dir: Path) -> None:
         """First pass: Discover all services in the source directory."""
         self.logger.info(f"Starting service discovery in {source_dir}")
-        services = ServiceCollection()
         discovered_services = self.service_analyzer.find_services(source_dir)
         self.logger.debug(f"Initially discovered {len(discovered_services)} services")
 
@@ -48,12 +50,11 @@ class AnalyzerManager:
             self.logger.debug(
                 f"Adding service: {service_name} at path {service.root_path}"
             )
-            services.add_service(service)
+            self.service_registry.register_service(service)
 
         self.logger.info(
-            f"Completed service discovery. Found {len(services.services)} services"
+            f"Completed service discovery. Found {len(self.service_registry.services)} services"
         )
-        return services
 
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
@@ -65,61 +66,61 @@ class AnalyzerManager:
             )
             for schema_name in schemas:
                 self.logger.debug(f"Found schema: {schema_name}")
-        service.schemas.update(schemas)
+            # Update service schemas through registry
+            service = self.service_registry.get_or_create_service(service.name)
+            service.schemas.update(schemas)
 
     def analyze_file(
-        self, file_path: Path, service: Service
-    ) -> Optional[Dict[str, KafkaTopic]]:
+        self, file_path: Path, service_name: str
+    ) -> None:
         """Analyze a file using all available file-level analyzers."""
         self.logger.debug(f"Analyzing file: {file_path}")
-        all_topics = {}
+        service = self.service_registry.get_or_create_service(service_name)
 
         for analyzer in self.file_analyzers:
             try:
-                topics = analyzer.analyze(file_path, service)
-                if topics:
+                result = analyzer.analyze(file_path, service)
+                if result.topics or result.discovered_services or result.service_relationships:
                     self.logger.debug(
-                        f"Analyzer {analyzer.__class__.__name__} found "
-                        f"{len(topics)} topics in {file_path}"
+                        f"Analyzer {analyzer.__class__.__name__} found results in {file_path}"
                     )
-                    for topic_name, topic in topics.items():
-                        if topic_name not in all_topics:
-                            self.logger.debug(f"New topic found: {topic_name}")
-                            all_topics[topic_name] = topic
-                        else:
-                            self.logger.debug(
-                                f"Merging additional info for topic: {topic_name}"
-                            )
-                            # Merge producers and consumers
-                            all_topics[topic_name].producers.update(topic.producers)
-                            all_topics[topic_name].consumers.update(topic.consumers)
+                    self.service_registry.apply_analysis_result(result)
             except Exception as e:
                 self.logger.warning(
                     f"Error in analyzer {analyzer.__class__.__name__} for file {file_path}: {e}"
                 )
 
-        return all_topics if all_topics else None
-
-    def analyze_service_dependencies(self, services: ServiceCollection) -> None:
+    def analyze_service_dependencies(self) -> None:
         """Run all service-level analyzers on the service collection."""
         self.logger.info("Starting service dependency analysis")
+        # Convert registry to collection for backward compatibility with existing analyzers
+        services = self.service_registry.to_service_collection()
+        
         for analyzer in self.service_level_analyzers:
             try:
                 self.logger.debug(
                     f"Running service-level analyzer: {analyzer.__class__.__name__}"
                 )
                 analyzer.analyze_services(services)
+                # After analysis, update the registry with any new relationships found
+                for service_name, service in services.services.items():
+                    if service.dependencies:
+                        for dep in service.dependencies:
+                            self.service_registry.add_relationship(
+                                source=service_name,
+                                target=dep,
+                                type_="dependency"
+                            )
             except Exception as e:
                 self.logger.error(
                     f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}"
                 )
 
-    def generate_output(
-        self, services: ServiceCollection, include_debug: bool = False
-    ) -> Dict[str, Any]:
+    def generate_output(self, include_debug: bool = False) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
         self.logger.info("Generating output")
-        self.logger.debug(f"Processing {len(services.services)} services for output")
+        services = self.service_registry.services
+        self.logger.debug(f"Processing {len(services)} services for output")
 
         result: Dict[str, Any] = {
             "services": {
@@ -145,8 +146,16 @@ class AnalyzerManager:
                         }
                         for schema in svc.schemas.values()
                     },
+                    "relationships": [
+                        {
+                            "target": rel.target,
+                            "type": rel.type,
+                            "details": rel.details
+                        }
+                        for rel in self.service_registry.get_relationships(name)
+                    ]
                 }
-                for name, svc in services.services.items()
+                for name, svc in services.items()
             }
         }
 
@@ -165,13 +174,12 @@ class AnalyzerManager:
 
     def save_output(
         self,
-        services: ServiceCollection,
         output_path: Path,
         include_debug: bool = False,
     ) -> None:
         """Generate and save analysis results to a JSON file."""
         self.logger.info(f"Saving analysis results to {output_path}")
-        result = self.generate_output(services, include_debug)
+        result = self.generate_output(include_debug)
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
         self.logger.info("Successfully saved analysis results")
