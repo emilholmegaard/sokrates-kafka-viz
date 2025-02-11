@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
+from ..models.service_registry import AnalysisResult, ServiceRelationship
 from .analyzer import Analyzer, KafkaPatterns
 
 
@@ -63,6 +64,13 @@ class SpringCloudStreamAnalyzer(Analyzer):
             r'@PatchMapping\s*\(\s*["\']([^"\']+)["\']\)',
         }
 
+        # Add dependency injection patterns for service discovery
+        self.service_patterns = {
+            r'@Autowired\s+(?:private\s+)?(\w+)\s+\w+',
+            r'@Qualifier\s*\(\s*["\']([^"\']+)["\']\)',
+            r'@DependsOn\s*\(\s*["\']([^"\']+)["\']\)',
+        }
+
     def can_analyze(self, file_path: Path) -> bool:
         """Check if file is a Spring Cloud Stream source file, config, or REST controller."""
         if not file_path.suffix.lower() == ".java":
@@ -90,7 +98,7 @@ class SpringCloudStreamAnalyzer(Analyzer):
         except Exception:
             return False
 
-    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
+    def analyze(self, file_path: Path, service: Service) -> AnalysisResult:
         """Analyze a file for Spring Cloud Stream and REST endpoints.
 
         Args:
@@ -98,24 +106,42 @@ class SpringCloudStreamAnalyzer(Analyzer):
             service: Service the file belongs to
 
         Returns:
-            Dict[str, KafkaTopic]: Dictionary of topics found
+            AnalysisResult: Analysis results including topics, discovered services and relationships
         """
+        result = AnalysisResult(affected_service=service.name)
+        
         if not self.can_analyze(file_path):
-            return {}
+            return result
 
         try:
             content = file_path.read_text()
         except Exception:
-            return {}
-
-        topics: Dict[str, KafkaTopic] = {}
+            return result
 
         # Find topics for each pattern type using base class implementation
-        base_topics = super()._analyze_content(content, file_path, service)
-        topics.update(base_topics)
+        topics = self._analyze_content(content, file_path, service)
+        result.topics.update(topics)
 
-        # Additional Spring-specific analysis can be added here
-        # For example, analyzing application.properties/yaml for stream bindings
+        # Look for service dependencies through DI patterns
+        for pattern in self.service_patterns:
+            for match in re.finditer(pattern, content):
+                service_name = match.group(1)
+                # Convert CamelCase to kebab-case for service names
+                service_name = re.sub(r'([a-z0-9])([A-Z])', r'\1-\2', service_name).lower()
+                if service_name != service.name:  # Don't add self-references
+                    # Add as discovered service
+                    discovered_service = Service(name=service_name)
+                    result.discovered_services[service_name] = discovered_service
+                    # Add relationship
+                    relationship = ServiceRelationship(
+                        source=service.name,
+                        target=service_name,
+                        type_="spring-dependency",
+                        details={"injection_type": "autowired"}
+                    )
+                    result.service_relationships.append(relationship)
+
+        # Additional Spring-specific analysis
         config_files = [
             file_path.parent / "application.properties",
             file_path.parent / "application.yml",
@@ -131,22 +157,50 @@ class SpringCloudStreamAnalyzer(Analyzer):
                         r"spring\.cloud\.stream\.bindings\.([^.]+)\."
                         r"(destination|topic)\s*=\s*([^\s]+)"
                     )
+                    
+                    # Look for external service configurations
+                    service_pattern = re.compile(
+                        r"([\w-]+)\.url\s*=\s*([^\s]+)"
+                    )
+                    
+                    # Process stream bindings
                     for match in binding_pattern.finditer(config_content):
                         binding_name = match.group(1)
-                        topic_name = match.group(3).strip("\"'")
+                        topic_name = match.group(3).strip('"\'')
 
-                        if topic_name not in topics:
-                            topics[topic_name] = KafkaTopic(topic_name)
-
+                        topic = KafkaTopic(topic_name)
+                        
                         # Check if it's an input or output binding
                         if ".input." in binding_name.lower():
-                            topics[topic_name].consumers.add(service.name)
+                            topic.consumers.add(service.name)
                         elif ".output." in binding_name.lower():
-                            topics[topic_name].producers.add(service.name)
+                            topic.producers.add(service.name)
+                            
+                        result.topics[topic_name] = topic
+
+                    # Process external service configurations
+                    for match in service_pattern.finditer(config_content):
+                        ext_service_name = match.group(1)
+                        service_url = match.group(2)
+                        
+                        # Add external service as discovered service
+                        if ext_service_name != service.name:
+                            ext_service = Service(name=ext_service_name)
+                            result.discovered_services[ext_service_name] = ext_service
+                            
+                            # Add relationship
+                            relationship = ServiceRelationship(
+                                source=service.name,
+                                target=ext_service_name,
+                                type_="rest-client",
+                                details={"url": service_url}
+                            )
+                            result.service_relationships.append(relationship)
+                            
                 except Exception:
                     continue
 
-        return topics
+        return result
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information specific to Spring Cloud Stream analysis."""
@@ -158,6 +212,7 @@ class SpringCloudStreamAnalyzer(Analyzer):
                     "producers": list(self.patterns.producers),
                     "ignore_patterns": list(self.patterns.ignore_patterns),
                     "rest_patterns": list(self.rest_patterns),
+                    "service_patterns": list(self.service_patterns)
                 }
             }
         )
