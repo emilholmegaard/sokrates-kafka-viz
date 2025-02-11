@@ -78,7 +78,7 @@ def test_analyze_spring_cloud_stream_bindings(
     @StreamListener("input-channel")
     public void processMessage(Message message) {
         // Process message
-    }   
+    }
     @ServiceActivator(outputChannel = "output-channel")
     public void sendMessage(Message message) {
         // Send message
