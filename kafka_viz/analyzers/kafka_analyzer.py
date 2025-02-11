@@ -1,217 +1,104 @@
+"""Kafka-specific patterns and topic analysis."""
+
 import logging
-import re
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict, Set
 
-from kafka_viz.models import KafkaTopic, Service
-
+from ..models.schema import KafkaTopic
+from ..models.service import Service
+from ..models.service_registry import AnalysisResult
 from .analyzer import Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
 
 class KafkaAnalyzer(Analyzer):
-    """Analyzer for finding Kafka usage patterns in code."""
+    """Analyzer for Kafka-specific patterns."""
 
     def __init__(self):
         super().__init__()
-        self.analyzed_files = set()
-        # Define regex patterns for Kafka usage
         self.patterns = KafkaPatterns(
             producers={
-                # Plain Kafka patterns
-                # ProducerRecord constructor
-                r'new\s+ProducerRecord\s*<[^>]*>\s*\(\s*"([^"]+)"',
-                # Direct send
-                r'\.send\s*\(\s*"([^"]+)"',
-                # KafkaTemplate send
-                r'kafkaTemplate\.send\s*\(\s*"([^"]+)"',
-                # KafkaTemplate with constant
-                r"kafkaTemplate\.send\s*\(\s*([A-Z_]+)",
-                # Producer with constant
-                r"producer\.send\s*\(\s*([A-Z_]+)",
-                # Producer Record with constant
-                r"new\s+ProducerRecord\s*<[^>]*>\s*\(\s*([A-Z_]+)",
-                # Spring Cloud Stream patterns
-                # SendTo annotation
-                r'@SendTo\s*\(\s*"([^"]+)"\s*\)',
-                # Output channel
-                r'@Output\s*\(\s*"([^"]+)"\s*\)',
+                # Basic Kafka patterns
+                r'producer\.send\(\s*["\']([^"\']+)["\']\s*\)',
+                r'producer\.beginTransaction\(\s*["\']([^"\']+)["\']\s*\)',
+                r'@SendTo\(\s*["\']([^"\']+)["\']\s*\)',
+                r'ProducerRecord\(\s*["\']([^"\']+)["\']\s*\)',
+                # Configuration patterns
+                r'kafka\.topic\s*=\s*["\']([^"\']+)["\']\s*',
+                r'spring\.cloud\.stream\.bindings\.output\.destination\s*=\s*["\']([^"\']+)["\']\s*',
             },
             consumers={
-                # Plain Kafka patterns
-                # Subscribe with literal
-                r'\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*"([^"]+)"\s*\)',
-                # Subscribe with constant
-                r"\.subscribe\s*\(\s*(?:Arrays\.asList|List\.of)\s*\(\s*([A-Z_]+)\s*\)",
-                # Single topic literal
-                r'@KafkaListener\s*\(\s*topics\s*=\s*"([^"]+)"\s*\)',
-                # Single topic constant
-                r"@KafkaListener\s*\(\s*topics\s*=\s*([A-Z_]+)\s*\)",
-                # Array topics
-                r'@KafkaListener\s*\(\s*topics\s*=\s*\{\s*"([^"]+)"(?:\s*,\s*"[^"]+")*\s*\}\s*\)',
-                # Array constants
-                r"@KafkaListener\s*\(\s*topics\s*=\s*\{\s*([A-Z_]+)(?:\s*,\s*[A-Z_]+)*\s*\}\s*\)",
-                # Spring Cloud Stream patterns
-                # StreamListener
-                r'@StreamListener\s*\(\s*"([^"]+)"\s*\)',
-                # Input channel
-                r'@Input\s*\(\s*"([^"]+)"\s*\)',
+                # Basic Kafka patterns
+                r'consumer\.subscribe\(\s*["\']([^"\']+)["\']\s*\)',
+                r'@KafkaListener\(\s*topics\s*=\s*["\']([^"\']+)["\']\s*\)',
+                r'ConsumerRecord\<[^>]+\>\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^;]+;',
+                # Configuration patterns
+                r'spring\.cloud\.stream\.bindings\.input\.destination\s*=\s*["\']([^"\']+)["\']\s*',
             },
             topic_configs={
-                # Configuration patterns
-                # Constants
-                r'(?:private|public|static)\s+(?:final\s+)?String\s+([A-Z_]+)\s*=\s*"([^"]+)"',
-                # Spring config
-                r'@Value\s*\(\s*"\$\{([^}]+\.topic)\}"\s*\)\s*private\s+String\s+([^;\s]+)',
-                # Stream binding
-                r"spring\.cloud\.stream\.bindings\.([^.]+)\.destination\s*=",
-                # Topic config
-                r'@TopicConfig\s*\(\s*name\s*=\s*"([^"]+)"',
+                # Topic configuration patterns
+                r'admin\.createTopics\(\s*["\']([^"\']+)["\']\s*\)',
+                r'@Topic\(\s*["\']([^"\']+)["\']\s*\)',
+                r'@StreamListener\(\s*["\']([^"\']+)["\']\s*\)',
+            },
+            ignore_patterns={
+                r'@TestConfiguration',
+                r'@SpringBootTest',
+                r'@Test',
             },
         )
 
     def can_analyze(self, file_path: Path) -> bool:
-        """Check if file is a Java source file."""
-        return file_path.suffix.lower() == ".java"
+        """Check if file can be analyzed for Kafka patterns."""
+        return any(
+            file_path.suffix.lower() == ext
+            for ext in [".java", ".kt", ".py", ".js", ".ts", ".properties", ".yml", ".yaml"]
+        )
 
-    def _extract_topic_vars(self, content: str) -> Dict[str, str]:
-        """Extract topic variables and constants from file content."""
-        topic_vars = {}
-        for pattern in self.patterns.topic_configs:
-            matches = re.finditer(pattern, content)
-            for match in matches:
-                groups = match.groups()
-                if len(groups) == 2:  # For constant declarations
-                    var_name, topic_name = groups
-                    topic_vars[var_name] = topic_name
-                elif len(groups) == 1:  # For Spring config and topic config
-                    # Extract the last part as the variable name
-                    parts = groups[0].split(".")
-                    if len(parts) > 1:
-                        # For spring.cloud.stream.bindings.<name>.destination
-                        # we want <name> as both key and value since it's the topic name
-                        topic_vars[parts[-2]] = parts[-2]
-                    else:
-                        # For @TopicConfig(name="topic") just use the topic name directly
-                        topic_vars[groups[0]] = groups[0]
-        return topic_vars
-
-    def analyze_service(self, service: Service) -> Dict[str, KafkaTopic]:
-        """Analyze a service for Kafka usage.
+    def analyze(self, file_path: Path, service: Service) -> AnalysisResult:
+        """Analyze a file for Kafka topic usage.
 
         Args:
-            service: Service to analyze
+            file_path: Path to file to analyze
+            service: Service the file belongs to
 
         Returns:
-            Dict[str, KafkaTopic]: Dictionary of topics found
+            AnalysisResult containing found topics and relationships
         """
-        # Make sure we're working with an absolute path
-        base_path = service.root_path.resolve()
+        result = AnalysisResult(affected_service=service.name)
+        
+        if not self.can_analyze(file_path):
+            logger.debug(f"Skipping {file_path} - not supported by analyzer")
+            return result
 
-        # Find all Java files
-        java_files = list(base_path.rglob("*.java"))
-        logger.debug(f"Found {len(java_files)} Java files in {base_path}")
+        try:
+            # Get topics from base analyzer
+            topics = super()._analyze_content(
+                file_path.read_text(), file_path, service
+            )
+            if topics:
+                result.topics.update(topics)
+                logger.debug(f"Found topics in {file_path}: {list(topics.keys())}")
 
-        for file_path in java_files:
-            # Include test data files but exclude regular test files
-            if ("src/test" not in str(file_path) and "test/" not in str(file_path)) or (
-                "tests/test_data" in str(file_path)
-            ):
-                try:
-                    found_topics = self.analyze(file_path, service)
-                    if found_topics:
-                        for topic_name, topic in found_topics.items():
-                            if topic_name not in service.topics:
-                                service.topics[topic_name] = topic
-                            else:
-                                # Merge producers and consumers
-                                service.topics[topic_name].producers.update(
-                                    topic.producers
-                                )
-                                service.topics[topic_name].consumers.update(
-                                    topic.consumers
-                                )
-                                # Update producer/consumer locations if they exist
-                                for (
-                                    service_name,
-                                    locations,
-                                ) in topic.producer_locations.items():
-                                    for location in locations:
-                                        service.topics[
-                                            topic_name
-                                        ].add_producer_location(service_name, location)
-                                for (
-                                    service_name,
-                                    locations,
-                                ) in topic.consumer_locations.items():
-                                    for location in locations:
-                                        service.topics[
-                                            topic_name
-                                        ].add_consumer_location(service_name, location)
-                except Exception as e:
-                    logger.error(f"Error analyzing {file_path}: {str(e)}")
+                # Add relationships for topics
+                for topic_name, topic in topics.items():
+                    self._add_topic_relationships(topic, result)
 
-        return service.topics
+        except Exception as e:
+            logger.error(f"Error analyzing {file_path}: {str(e)}")
 
-    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
-        """Analyze Java file for Kafka patterns."""
-        self.analyzed_files.add(file_path)
-        content = file_path.read_text()
+        return result
 
-        # First pass: collect topic variables/constants
-        topic_vars = self._extract_topic_vars(content)
-
-        # Track found topics
-        topics: Dict[str, KafkaTopic] = {}
-
-        # Helper function to process matches
-        def process_match(match, is_producer: bool):
-            topic_name = match.group(1)
-            # Check if it's a variable reference
-            if topic_name in topic_vars:
-                topic_name = topic_vars[topic_name]
-
-            if topic_name not in topics:
-                topics[topic_name] = KafkaTopic(topic_name)
-
-            location = {
-                "file": str(file_path.relative_to(service.root_path)),
-                "line": len(content[: match.start()].splitlines()) + 1,
-                "column": match.start(1)
-                - len(content[: match.start()].splitlines()[-1]),
-            }
-
-            if is_producer:
-                topics[topic_name].producers.add(service.name)
-                topics[topic_name].add_producer_location(service.name, location)
-            else:
-                topics[topic_name].consumers.add(service.name)
-                topics[topic_name].add_consumer_location(service.name, location)
-
-        # Analyze producers
-        for pattern in self.patterns.producers:
-            for match in re.finditer(pattern, content):
-                process_match(match, True)
-
-        # Analyze consumers
-        for pattern in self.patterns.consumers:
-            for match in re.finditer(pattern, content):
-                process_match(match, False)
-
-        return topics
-
-    def get_debug_info(self) -> Dict[str, Any]:
-        """Get debug information about the Kafka analysis."""
-        base_info = super().get_debug_info()
-        base_info.update(
-            {
-                "patterns": {
-                    "producers": list(self.patterns.producers),
-                    "consumers": list(self.patterns.consumers),
-                    "topic_configs": list(self.patterns.topic_configs),
-                },
-                "analyzed_files": [str(file) for file in self.analyzed_files],
-            }
-        )
-        return base_info
+    def _add_topic_relationships(self, topic: KafkaTopic, result: AnalysisResult) -> None:
+        """Add relationships based on topic producers and consumers."""
+        # Add relationships between producers and consumers
+        for producer in topic.producers:
+            for consumer in topic.consumers:
+                if producer != consumer:
+                    result.add_relationship(
+                        source=producer,
+                        target=consumer,
+                        type_="kafka",
+                        details={"topic": topic.name}
+                    )
