@@ -137,7 +137,8 @@ def analyze(
                                 service.topics.update(topics)
                                 topics_found += len(topics)
                                 logger.debug(
-                                    f"Found {len(topics)} topics in {file_path.relative_to(service.root_path)}"
+                                    f"Found {len(topics)} topics in "
+                                    f"{file_path.relative_to(service.root_path)}"
                                 )
                         except Exception as e:
                             if verbose:

@@ -43,12 +43,16 @@ class AnalyzerManager:
         services = ServiceCollection()
         discovered_services = self.service_analyzer.find_services(source_dir)
         self.logger.debug(f"Initially discovered {len(discovered_services)} services")
-        
+
         for service_name, service in discovered_services.items():
-            self.logger.debug(f"Adding service: {service_name} at path {service.root_path}")
+            self.logger.debug(
+                f"Adding service: {service_name} at path {service.root_path}"
+            )
             services.add_service(service)
-        
-        self.logger.info(f"Completed service discovery. Found {len(services.services)} services")
+
+        self.logger.info(
+            f"Completed service discovery. Found {len(services.services)} services"
+        )
         return services
 
     def analyze_schemas(self, service: Service) -> None:
@@ -56,7 +60,9 @@ class AnalyzerManager:
         self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
         schemas = self.schema_analyzer.analyze_directory(service.root_path)
         if schemas:
-            self.logger.debug(f"Found {len(schemas)} schemas for service at {service.root_path}")
+            self.logger.debug(
+                f"Found {len(schemas)} schemas for service at {service.root_path}"
+            )
             for schema_name in schemas:
                 self.logger.debug(f"Found schema: {schema_name}")
         service.schemas.update(schemas)
@@ -73,14 +79,17 @@ class AnalyzerManager:
                 topics = analyzer.analyze(file_path, service)
                 if topics:
                     self.logger.debug(
-                        f"Analyzer {analyzer.__class__.__name__} found {len(topics)} topics in {file_path}"
+                        f"Analyzer {analyzer.__class__.__name__} found "
+                        f"{len(topics)} topics in {file_path}"
                     )
                     for topic_name, topic in topics.items():
                         if topic_name not in all_topics:
                             self.logger.debug(f"New topic found: {topic_name}")
                             all_topics[topic_name] = topic
                         else:
-                            self.logger.debug(f"Merging additional info for topic: {topic_name}")
+                            self.logger.debug(
+                                f"Merging additional info for topic: {topic_name}"
+                            )
                             # Merge producers and consumers
                             all_topics[topic_name].producers.update(topic.producers)
                             all_topics[topic_name].consumers.update(topic.consumers)
@@ -96,7 +105,9 @@ class AnalyzerManager:
         self.logger.info("Starting service dependency analysis")
         for analyzer in self.service_level_analyzers:
             try:
-                self.logger.debug(f"Running service-level analyzer: {analyzer.__class__.__name__}")
+                self.logger.debug(
+                    f"Running service-level analyzer: {analyzer.__class__.__name__}"
+                )
                 analyzer.analyze_services(services)
             except Exception as e:
                 self.logger.error(
@@ -109,7 +120,7 @@ class AnalyzerManager:
         """Generate JSON-compatible output dictionary."""
         self.logger.info("Generating output")
         self.logger.debug(f"Processing {len(services.services)} services for output")
-        
+
         result: Dict[str, Any] = {
             "services": {
                 name: {
