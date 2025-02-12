@@ -5,9 +5,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..models.schema import KafkaTopic, AvroSchema
+from ..models.schema import AvroSchema, KafkaTopic
 from ..models.service import Service
 from ..models.service_collection import ServiceCollection
+from ..models.service_registry import ServiceRegistry
 from .avro_analyzer import AvroAnalyzer
 from .dependency_analyzer import DependencyAnalyzer
 from .java_analyzer import JavaAnalyzer
@@ -40,21 +41,44 @@ class AnalyzerManager:
     def discover_services(self, source_dir: Path) -> ServiceCollection:
         """First pass: Discover all services in the source directory."""
         self.logger.info(f"Starting service discovery in {source_dir}")
-        services = ServiceCollection()
-        discovered_services = self.service_analyzer.find_services(source_dir)
-        self.logger.debug(f"Initially discovered {len(discovered_services)} services")
+        analysis_result = self.service_analyzer.find_services(source_dir)
+        self.logger.debug(
+            f"Initially discovered {len(analysis_result.discovered_services)} services"
+        )
 
         # Process each discovered service
-        for service_name, service in discovered_services.items():
+        for service_name, service in analysis_result.discovered_services.items():
             self.logger.debug(
                 f"Adding service: {service_name} at path {service.root_path}"
             )
-            services.add_service(service)
+            self.service_registry.register_service(service)
+
+        # Register relationships found during discovery
+        for relationship in analysis_result.service_relationships:
+            self.service_registry.add_relationship(
+                relationship.source,
+                relationship.target,
+                relationship.type,
+                relationship.details,
+            )
+            # Create a new service entry with proper metadata
+            new_service = Service(service.root_path, service.name, service.language)
+            new_service.pom_path = (
+                service.pom_path if hasattr(service, "pom_path") else None
+            )
+            new_service.package_json_path = (
+                service.package_json_path
+                if hasattr(service, "package_json_path")
+                else None
+            )
+            self.service_registry.add_service(new_service)
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"
         )
-        return services
+
+        # Convert registry to ServiceCollection for backward compatibility
+        return self.service_registry.to_service_collection()
 
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
@@ -86,7 +110,7 @@ class AnalyzerManager:
                         f"Analyzer {analyzer.__class__.__name__} found "
                         f"{len(topics)} topics in {file_path}"
                     )
-                    for topic_name, topic in topics.items():
+                    for topic_name, topic in result.topics.items():
                         if topic_name not in all_topics:
                             self.logger.debug(f"New topic found: {topic_name}")
                             all_topics[topic_name] = topic
@@ -94,17 +118,17 @@ class AnalyzerManager:
                             existing_topic = all_topics[topic_name]
                             # Merge producers
                             for producer in topic.producers:
-                                existing_topic.producers.add(producer)
-                                if producer in topic.producer_locations:
-                                    existing_topic.producer_locations.setdefault(producer, []).extend(
-                                        topic.producer_locations[producer]
+                                if producer not in existing_topic.producers:
+                                    existing_topic.producers.add(producer)
+                                    existing_topic.producer_locations.update(
+                                        topic.producer_locations
                                     )
                             # Merge consumers
                             for consumer in topic.consumers:
-                                existing_topic.consumers.add(consumer)
-                                if consumer in topic.consumer_locations:
-                                    existing_topic.consumer_locations.setdefault(consumer, []).extend(
-                                        topic.consumer_locations[consumer]
+                                if consumer not in existing_topic.consumers:
+                                    existing_topic.consumers.add(consumer)
+                                    existing_topic.consumer_locations.update(
+                                        topic.consumer_locations
                                     )
             except Exception as e:
                 self.logger.warning(
@@ -113,9 +137,31 @@ class AnalyzerManager:
 
         return all_topics if all_topics else None
 
-    def generate_output(
-        self, services: ServiceCollection, verbose: bool = False
-    ) -> Dict[str, Any]:
+    def analyze_service_dependencies(self) -> None:
+        """Run all service-level analyzers on the service collection."""
+        self.logger.info("Starting service dependency analysis")
+        # Convert registry to collection for backward compatibility with existing analyzers
+        services = self.service_registry.to_service_collection()
+
+        for analyzer in self.service_level_analyzers:
+            try:
+                self.logger.debug(
+                    f"Running service-level analyzer: {analyzer.__class__.__name__}"
+                )
+                analyzer.analyze_services(services)
+                # After analysis, update the registry with any new relationships found
+                for service_name, service in services.services.items():
+                    if service.dependencies:
+                        for dep in service.dependencies:
+                            self.service_registry.add_relationship(
+                                source=service_name, target=dep, type_="dependency"
+                            )
+            except Exception as e:
+                self.logger.error(
+                    f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}"
+                )
+
+    def generate_output(self, include_debug: bool = False) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
         self.logger.info("Generating output")
         self.logger.debug(f"Processing {len(services.services)} services for output")
@@ -131,36 +177,36 @@ class AnalyzerManager:
                             "consumers": sorted(list(topic.consumers)),
                             "producer_locations": {
                                 producer: sorted(
-                                    [{"file": str(loc["file"]), "line": loc["line"]} 
-                                     for loc in locs]
+                                    [
+                                        {"file": str(loc["file"]), "line": loc["line"]}
+                                        for loc in locs
+                                    ]
                                 )
                                 for producer, locs in topic.producer_locations.items()
                             },
                             "consumer_locations": {
-                                consumer: sorted(
-                                    [{"file": str(loc["file"]), "line": loc["line"]} 
-                                     for loc in locs]
-                                )
-                                for consumer, locs in topic.consumer_locations.items()
-                            }
+                                consumer: locations
+                                for consumer, locations in topic.consumer_locations.items()
+                            },
                         }
                         for topic_name, topic in svc.topics.items()
                     },
                     "schemas": {
-                        schema_name: {
-                            "type": "avro" if isinstance(schema, AvroSchema) else "dto",
+                        schema.name: {
+                            "type": (
+                                "avro"
+                                if schema.__class__.__name__ == "AvroSchema"
+                                else "dto"
+                            ),
                             "namespace": getattr(schema, "namespace", ""),
-                            "fields": [
-                                {
-                                    "name": field["name"],
-                                    "type": field["type"],
-                                    "doc": field.get("doc", "")
-                                }
-                                for field in schema.fields
-                            ] if hasattr(schema, "fields") else []
+                            "fields": schema.fields,
                         }
-                        for schema_name, schema in svc.schemas.items()
-                    }
+                        for schema in svc.schemas.values()
+                    },
+                    "relationships": [
+                        {"target": rel.target, "type": rel.type, "details": rel.details}
+                        for rel in self.service_registry.get_relationships(name)
+                    ],
                 }
                 for name, svc in services.services.items()
             }
@@ -188,16 +234,16 @@ class AnalyzerManager:
     ) -> None:
         """Generate and save analysis results to a JSON file."""
         self.logger.info(f"Saving analysis results to {output_path}")
-        result = self.generate_output(services, verbose=verbose)
-        
+        result = self.generate_output(self.service_registry.services, include_debug)
+
         # Handle encoding of Path objects and sets
         def json_encoder(obj):
             if isinstance(obj, Path):
                 return str(obj)
             if isinstance(obj, set):
-                return sorted(list(obj))
-            raise TypeError(f'Object of type {type(obj)} is not JSON serializable')
-        
+                return list(obj)
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2, default=json_encoder)
         self.logger.info("Successfully saved analysis results")
