@@ -44,11 +44,16 @@ class AnalyzerManager:
         discovered_services = self.service_analyzer.find_services(source_dir)
         self.logger.debug(f"Initially discovered {len(discovered_services)} services")
 
+        # Process each discovered service
         for service_name, service in discovered_services.items():
             self.logger.debug(
                 f"Adding service: {service_name} at path {service.root_path}"
             )
-            services.add_service(service)
+            # Create a new service entry with proper metadata
+            new_service = Service(service.root_path, service.name, service.language)
+            new_service.pom_path = service.pom_path if hasattr(service, 'pom_path') else None
+            new_service.package_json_path = service.package_json_path if hasattr(service, 'package_json_path') else None
+            services.add_service(new_service)
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"
@@ -87,12 +92,17 @@ class AnalyzerManager:
                             self.logger.debug(f"New topic found: {topic_name}")
                             all_topics[topic_name] = topic
                         else:
-                            self.logger.debug(
-                                f"Merging additional info for topic: {topic_name}"
-                            )
-                            # Merge producers and consumers
-                            all_topics[topic_name].producers.update(topic.producers)
-                            all_topics[topic_name].consumers.update(topic.consumers)
+                            existing_topic = all_topics[topic_name]
+                            # Merge producers
+                            for producer in topic.producers:
+                                if producer not in existing_topic.producers:
+                                    existing_topic.producers.add(producer)
+                                    existing_topic.producer_locations.update(topic.producer_locations)
+                            # Merge consumers
+                            for consumer in topic.consumers:
+                                if consumer not in existing_topic.consumers:
+                                    existing_topic.consumers.add(consumer)
+                                    existing_topic.consumer_locations.update(topic.consumer_locations)
             except Exception as e:
                 self.logger.warning(
                     f"Error in analyzer {analyzer.__class__.__name__} for file {file_path}: {e}"
@@ -127,19 +137,23 @@ class AnalyzerManager:
                     "path": str(svc.root_path),
                     "language": svc.language,
                     "topics": {
-                        topic.name: {
-                            "producers": list(topic.producers),
-                            "consumers": list(topic.consumers),
+                        topic_name: {
+                            "producers": sorted(list(topic.producers)),
+                            "consumers": sorted(list(topic.consumers)),
+                            "producer_locations": {
+                                producer: locations
+                                for producer, locations in topic.producer_locations.items()
+                            },
+                            "consumer_locations": {
+                                consumer: locations
+                                for consumer, locations in topic.consumer_locations.items()
+                            }
                         }
-                        for topic in svc.topics.values()
+                        for topic_name, topic in svc.topics.items()
                     },
                     "schemas": {
                         schema.name: {
-                            "type": (
-                                "avro"
-                                if schema.__class__.__name__ == "AvroSchema"
-                                else "dto"
-                            ),
+                            "type": "avro" if schema.__class__.__name__ == "AvroSchema" else "dto",
                             "namespace": getattr(schema, "namespace", ""),
                             "fields": schema.fields,
                         }
@@ -172,8 +186,17 @@ class AnalyzerManager:
         """Generate and save analysis results to a JSON file."""
         self.logger.info(f"Saving analysis results to {output_path}")
         result = self.generate_output(services, include_debug)
+        
+        # Handle encoding of Path objects and sets
+        def json_encoder(obj):
+            if isinstance(obj, Path):
+                return str(obj)
+            if isinstance(obj, set):
+                return list(obj)
+            raise TypeError(f'Object of type {type(obj)} is not JSON serializable')
+        
         with open(output_path, "w") as f:
-            json.dump(result, f, indent=2)
+            json.dump(result, f, indent=2, default=json_encoder)
         self.logger.info("Successfully saved analysis results")
 
     def get_debug_info(self) -> List[Dict[str, Any]]:
