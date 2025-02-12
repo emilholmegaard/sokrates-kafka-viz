@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..models.schema import AvroSchema, KafkaTopic
+from ..models.schema import KafkaTopic
 from ..models.service import Service
 from ..models.service_collection import ServiceCollection
 from .avro_analyzer import AvroAnalyzer
@@ -49,7 +49,17 @@ class AnalyzerManager:
             self.logger.debug(
                 f"Adding service: {service_name} at path {service.root_path}"
             )
-            services.add_service(service)
+            # Create a new service entry with proper metadata
+            new_service = Service(service.root_path, service.name, service.language)
+            new_service.pom_path = (
+                service.pom_path if hasattr(service, "pom_path") else None
+            )
+            new_service.package_json_path = (
+                service.package_json_path
+                if hasattr(service, "package_json_path")
+                else None
+            )
+            services.add_service(new_service)
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"
@@ -59,17 +69,14 @@ class AnalyzerManager:
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
         self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
-        try:
-            schemas = self.schema_analyzer.analyze_directory(service.root_path)
-            if schemas:
-                self.logger.debug(
-                    f"Found {len(schemas)} schemas for service at {service.root_path}"
-                )
-                for schema_name in schemas:
-                    self.logger.debug(f"Found schema: {schema_name}")
-                service.schemas.update(schemas)
-        except Exception as e:
-            self.logger.warning(f"Error analyzing schemas for {service.name}: {e}")
+        schemas = self.schema_analyzer.analyze_directory(service.root_path)
+        if schemas:
+            self.logger.debug(
+                f"Found {len(schemas)} schemas for service at {service.root_path}"
+            )
+            for schema_name in schemas:
+                self.logger.debug(f"Found schema: {schema_name}")
+        service.schemas.update(schemas)
 
     def analyze_file(
         self, file_path: Path, service: Service
@@ -94,18 +101,18 @@ class AnalyzerManager:
                             existing_topic = all_topics[topic_name]
                             # Merge producers
                             for producer in topic.producers:
-                                existing_topic.producers.add(producer)
-                                if producer in topic.producer_locations:
-                                    existing_topic.producer_locations.setdefault(
-                                        producer, []
-                                    ).extend(topic.producer_locations[producer])
+                                if producer not in existing_topic.producers:
+                                    existing_topic.producers.add(producer)
+                                    existing_topic.producer_locations.update(
+                                        topic.producer_locations
+                                    )
                             # Merge consumers
                             for consumer in topic.consumers:
-                                existing_topic.consumers.add(consumer)
-                                if consumer in topic.consumer_locations:
-                                    existing_topic.consumer_locations.setdefault(
-                                        consumer, []
-                                    ).extend(topic.consumer_locations[consumer])
+                                if consumer not in existing_topic.consumers:
+                                    existing_topic.consumers.add(consumer)
+                                    existing_topic.consumer_locations.update(
+                                        topic.consumer_locations
+                                    )
             except Exception as e:
                 self.logger.warning(
                     f"Error in analyzer {analyzer.__class__.__name__} for file {file_path}: {e}"
@@ -113,8 +120,22 @@ class AnalyzerManager:
 
         return all_topics if all_topics else None
 
+    def analyze_service_dependencies(self, services: ServiceCollection) -> None:
+        """Run all service-level analyzers on the service collection."""
+        self.logger.info("Starting service dependency analysis")
+        for analyzer in self.service_level_analyzers:
+            try:
+                self.logger.debug(
+                    f"Running service-level analyzer: {analyzer.__class__.__name__}"
+                )
+                analyzer.analyze_services(services)
+            except Exception as e:
+                self.logger.error(
+                    f"Error in service-level analyzer {analyzer.__class__.__name__}: {e}"
+                )
+
     def generate_output(
-        self, services: ServiceCollection, verbose: bool = False
+        self, services: ServiceCollection, include_debug: bool = False
     ) -> Dict[str, Any]:
         """Generate JSON-compatible output dictionary."""
         self.logger.info("Generating output")
@@ -130,44 +151,27 @@ class AnalyzerManager:
                             "producers": sorted(list(topic.producers)),
                             "consumers": sorted(list(topic.consumers)),
                             "producer_locations": {
-                                producer: sorted(
-                                    [
-                                        {"file": str(loc["file"]), "line": loc["line"]}
-                                        for loc in locs
-                                    ]
-                                )
-                                for producer, locs in topic.producer_locations.items()
+                                producer: locations
+                                for producer, locations in topic.producer_locations.items()
                             },
                             "consumer_locations": {
-                                consumer: sorted(
-                                    [
-                                        {"file": str(loc["file"]), "line": loc["line"]}
-                                        for loc in locs
-                                    ]
-                                )
-                                for consumer, locs in topic.consumer_locations.items()
+                                consumer: locations
+                                for consumer, locations in topic.consumer_locations.items()
                             },
                         }
                         for topic_name, topic in svc.topics.items()
                     },
                     "schemas": {
-                        schema_name: {
-                            "type": "avro" if isinstance(schema, AvroSchema) else "dto",
-                            "namespace": getattr(schema, "namespace", ""),
-                            "fields": (
-                                [
-                                    {
-                                        "name": field["name"],
-                                        "type": field["type"],
-                                        "doc": field.get("doc", ""),
-                                    }
-                                    for field in schema.fields
-                                ]
-                                if hasattr(schema, "fields")
-                                else []
+                        schema.name: {
+                            "type": (
+                                "avro"
+                                if schema.__class__.__name__ == "AvroSchema"
+                                else "dto"
                             ),
+                            "namespace": getattr(schema, "namespace", ""),
+                            "fields": schema.fields,
                         }
-                        for schema_name, schema in svc.schemas.items()
+                        for schema in svc.schemas.values()
                     },
                 }
                 for name, svc in services.services.items()
@@ -181,8 +185,7 @@ class AnalyzerManager:
                 f"{len(service_data['schemas'])} schemas"
             )
 
-        # Add debug info if requested
-        if verbose:
+        if include_debug:
             result["debug_info"] = self.get_debug_info()
             self.logger.debug("Added debug information to output")
 
@@ -192,18 +195,18 @@ class AnalyzerManager:
         self,
         services: ServiceCollection,
         output_path: Path,
-        verbose: bool = False,
+        include_debug: bool = False,
     ) -> None:
         """Generate and save analysis results to a JSON file."""
         self.logger.info(f"Saving analysis results to {output_path}")
-        result = self.generate_output(services, verbose=verbose)
+        result = self.generate_output(services, include_debug)
 
         # Handle encoding of Path objects and sets
         def json_encoder(obj):
             if isinstance(obj, Path):
                 return str(obj)
             if isinstance(obj, set):
-                return sorted(list(obj))
+                return list(obj)
             raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
         with open(output_path, "w") as f:
