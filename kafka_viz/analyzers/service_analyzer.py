@@ -47,7 +47,9 @@ class ServiceAnalyzer(BaseAnalyzer):
         Returns:
             AnalysisResult containing discovered services and their relationships
         """
-        result = AnalysisResult(affected_service="root")  # Special case for service discovery
+        result = AnalysisResult(
+            affected_service="root"
+        )  # Special case for service discovery
         root_path = Path(source_dir)
 
         # Track processed directories to avoid duplicate services
@@ -134,7 +136,9 @@ class ServiceAnalyzer(BaseAnalyzer):
             return build_file.parent.name
         return None
 
-    def _analyze_service_dependencies(self, service: Service, result: AnalysisResult) -> None:
+    def _analyze_service_dependencies(
+        self, service: Service, result: AnalysisResult
+    ) -> None:
         """Analyze service for dependencies and add to results."""
         if service.language == "java":
             self._analyze_java_service(service, result)
@@ -156,12 +160,14 @@ class ServiceAnalyzer(BaseAnalyzer):
             except Exception as e:
                 logger.warning(f"Error analyzing pom.xml for {service.name}: {e}")
 
-    def _analyze_spring_cloud_bindings(self, service: Service, result: AnalysisResult) -> None:
+    def _analyze_spring_cloud_bindings(
+        self, service: Service, result: AnalysisResult
+    ) -> None:
         """Analyze Spring Cloud Stream bindings in configuration."""
         config_files = [
             service.root_path / "src/main/resources/application.yml",
             service.root_path / "src/main/resources/application.yaml",
-            service.root_path / "src/main/resources/application.properties"
+            service.root_path / "src/main/resources/application.properties",
         ]
 
         for config_file in config_files:
@@ -169,28 +175,26 @@ class ServiceAnalyzer(BaseAnalyzer):
                 try:
                     content = config_file.read_text()
                     # Look for service dependencies in configuration
-                    service_pattern = re.compile(
-                        r'([\w-]+)\.url\s*=\s*([^\s]+)'
-                    )
-                    
+                    service_pattern = re.compile(r"([\w-]+)\.url\s*=\s*([^\s]+)")
+
                     for match in service_pattern.finditer(content):
                         dep_service_name = match.group(1)
                         service_url = match.group(2)
-                        
+
                         # Add as discovered service if not already known
                         if dep_service_name not in result.discovered_services:
                             dep_service = Service(name=dep_service_name)
                             result.discovered_services[dep_service_name] = dep_service
-                        
+
                         # Add relationship
                         relationship = ServiceRelationship(
                             source=service.name,
                             target=dep_service_name,
                             type_="spring-cloud",
-                            details={"url": service_url}
+                            details={"url": service_url},
                         )
                         result.service_relationships.append(relationship)
-                        
+
                 except Exception as e:
                     logger.warning(f"Error analyzing config file {config_file}: {e}")
 
@@ -203,34 +207,36 @@ class ServiceAnalyzer(BaseAnalyzer):
                     data = json.load(f)
                 deps = {
                     **data.get("dependencies", {}),
-                    **data.get("devDependencies", {})
+                    **data.get("devDependencies", {}),
                 }
-                
+
                 # Look for microservice-related dependencies
                 service_deps = [
-                    d for d in deps 
-                    if any(keyword in d.lower() 
-                          for keyword in ["service", "client", "api"])
+                    d
+                    for d in deps
+                    if any(
+                        keyword in d.lower() for keyword in ["service", "client", "api"]
+                    )
                 ]
-                
+
                 for dep in service_deps:
                     # Convert npm package names to service names
                     service_name = dep.replace("@", "").replace("/", "-")
-                    
+
                     # Add as discovered service
                     if service_name not in result.discovered_services:
                         dep_service = Service(name=service_name)
                         result.discovered_services[service_name] = dep_service
-                    
+
                     # Add relationship
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
                         type_="npm-dependency",
-                        details={"version": deps[dep]}
+                        details={"version": deps[dep]},
                     )
                     result.service_relationships.append(relationship)
-                    
+
             except Exception as e:
                 logger.warning(f"Error analyzing package.json for {service.name}: {e}")
 
@@ -242,27 +248,29 @@ class ServiceAnalyzer(BaseAnalyzer):
                 content = requirements_file.read_text()
                 # Look for service-related dependencies
                 service_pattern = re.compile(
-                    r'^([a-zA-Z0-9-]+(?:-client|-service|-api))[>=<~]'
+                    r"^([a-zA-Z0-9-]+(?:-client|-service|-api))[>=<~]"
                 )
-                
+
                 for match in service_pattern.finditer(content):
                     service_name = match.group(1)
-                    
+
                     # Add as discovered service
                     if service_name not in result.discovered_services:
                         dep_service = Service(name=service_name)
                         result.discovered_services[service_name] = dep_service
-                    
+
                     # Add relationship
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
-                        type_="python-dependency"
+                        type_="python-dependency",
                     )
                     result.service_relationships.append(relationship)
-                    
+
             except Exception as e:
-                logger.warning(f"Error analyzing requirements.txt for {service.name}: {e}")
+                logger.warning(
+                    f"Error analyzing requirements.txt for {service.name}: {e}"
+                )
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the service analyzer."""
@@ -270,5 +278,5 @@ class ServiceAnalyzer(BaseAnalyzer):
             "supported_languages": list(self.build_patterns.keys()),
             "test_directories": list(self.test_dirs),
             "analyzer_type": self.__class__.__name__,
-            "status": "active"
+            "status": "active",
         }
