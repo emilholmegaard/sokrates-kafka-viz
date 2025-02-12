@@ -1,3 +1,5 @@
+"""Base class for all analyzers."""
+
 import logging
 import re
 from pathlib import Path
@@ -5,6 +7,7 @@ from typing import Any, Dict, NamedTuple, Optional, Set
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
+from ..models.service_registry import AnalysisResult
 from .base_analyzer import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -80,7 +83,7 @@ class Analyzer(BaseAnalyzer):
         """
         raise NotImplementedError()
 
-    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
+    def analyze(self, file_path: Path, service: Service) -> AnalysisResult:
         """Analyze a file for Kafka topic usage.
 
         Args:
@@ -88,26 +91,30 @@ class Analyzer(BaseAnalyzer):
             service: Service the file belongs to
 
         Returns:
-            Dict[str, KafkaTopic]: Dictionary of topics found
+            AnalysisResult: Analysis results including topics and discovered services
         """
+        result = AnalysisResult(affected_service=service.name)
+
         if not self.can_analyze(file_path):
             logger.debug(f"Skipping {file_path} - not supported by analyzer")
-            return {}
+            return result
 
         try:
             with open(file_path) as f:
                 content = f.read()
                 if not content.strip():
                     logger.debug(f"Skipping {file_path} - empty file")
-                    return {}
+                    return result
         except (IOError, UnicodeDecodeError) as e:
             logger.error(f"Error reading {file_path}: {str(e)}")
-            return {}
+            return result
 
         topics = self._analyze_content(content, file_path, service)
         if topics:
             logger.debug(f"Found topics in {file_path}: {list(topics.keys())}")
-        return topics
+            result.topics.update(topics)
+
+        return result
 
     def _analyze_content(
         self, content: str, file_path: Path, service: Service
@@ -174,15 +181,6 @@ class Analyzer(BaseAnalyzer):
                 logger.debug(
                     f"Found topic configuration for '{topic_name}' in {file_path}"
                 )
-
-        # Update service topics
-        for topic_name, topic in topics.items():
-            if topic_name not in service.topics:
-                service.topics[topic_name] = topic
-            else:
-                # Merge producers and consumers
-                service.topics[topic_name].producers.update(topic.producers)
-                service.topics[topic_name].consumers.update(topic.consumers)
 
         return topics
 
