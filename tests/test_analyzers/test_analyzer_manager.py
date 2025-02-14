@@ -53,7 +53,6 @@ class TestAnalyzerManager:
         assert service.language == "java"
         assert len(service.source_files) == 1
 
-    @pytest.mark.skip(reason="Python service discovery is not a priority yet")
     def test_discover_services_python(
         self, analyzer_manager: AnalyzerManager, tmp_path: Path
     ) -> None:

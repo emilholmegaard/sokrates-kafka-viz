@@ -130,20 +130,35 @@ class ServiceAnalyzer(BaseAnalyzer):
             root_path=path,
             language=language,
         )
+        logger.debug(f"Creating service {name} at path {path} with language {language}")
+
         # Add source files
-        for ext in {
+        extensions = {
             "java": [".java"],
             "python": [".py"],
             "javascript": [".js", ".ts"],
             "csharp": [".cs"],
-        }.get(language, []):
-            for source_file in path.rglob(f"*{ext}"):
+        }.get(language, [])
+
+        logger.debug(f"Looking for files with extensions: {extensions}")
+
+        for ext in extensions:
+            found_files = list(path.rglob(f"*{ext}"))
+            logger.debug(
+                f"Found {len(found_files)} files with extension {ext}: {found_files}"
+            )
+
+            for source_file in found_files:
                 if not any(
                     str(source_file).startswith(str(path / test_dir))
                     for test_dir in self.test_dirs
                 ):
+                    logger.debug(f"Adding source file: {source_file}")
                     service.source_files.add(source_file)
+                else:
+                    logger.debug(f"Skipping test file: {source_file}")
 
+        logger.debug(f"Final source files: {service.source_files}")
         return service
 
     def _extract_service_name(self, build_file: Path, language: str) -> Optional[str]:

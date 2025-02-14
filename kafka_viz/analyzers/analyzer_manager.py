@@ -74,6 +74,9 @@ class AnalyzerManager:
                 root_path=service.root_path,
                 language=service.language,
             )
+
+            new_service.source_files = service.source_files.copy()
+
             new_service.pom_path = (
                 service.pom_path if hasattr(service, "pom_path") else None
             )
