@@ -223,7 +223,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                         relationship = ServiceRelationship(
                             source=service.name,
                             target=dep_service_name,
-                            type_="spring-cloud",
+                            type="spring-cloud",  # Changed from type_ to type
                             details={"url": service_url},
                         )
                         result.service_relationships.append(relationship)
@@ -267,7 +267,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
-                        type_="npm-dependency",
+                        type="npm-dependency",  # Changed from type_ to type
                         details={"version": deps[dep]},
                     )
                     result.service_relationships.append(relationship)
@@ -300,7 +300,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
-                        type_="python-dependency",
+                        type="python-dependency",  # Changed from type_ to type
                     )
                     result.service_relationships.append(relationship)
 
