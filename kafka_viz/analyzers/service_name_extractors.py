@@ -84,14 +84,12 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
             match = re.search(r'rootProject\.name\s*=\s*[\'"]([^\'"]+)[\'"]', content)
             if match:
                 name = match.group(1)
-                if name not in self.parent_artifact_ids:
-                    return self._sanitize_name(name)
+                return self._sanitize_name(name)
 
             match = re.search(r'archivesBaseName\s*=\s*[\'"]([^\'"]+)[\'"]', content)
             if match:
                 name = match.group(1)
-                if name not in self.parent_artifact_ids:
-                    return self._sanitize_name(name)
+                return self._sanitize_name(name)
 
             # Try project name from settings.gradle if it exists
             settings_gradle = gradle_file.parent / "settings.gradle"
@@ -102,8 +100,7 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
                 )
                 if match:
                     name = match.group(1)
-                    if name not in self.parent_artifact_ids:
-                        return self._sanitize_name(name)
+                    return self._sanitize_name(name)
 
         except Exception:
             pass
