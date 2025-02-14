@@ -10,11 +10,10 @@ class Service:
     def __init__(
         self,
         name: str,
-        path: Optional[Path] = None,
-        root_path: Optional[Path] = None,  # Added for backward compatibility
+        root_path: Path,
         language: str = "unknown",
         build_file: Optional[Path] = None,
-    ):
+    ) -> None:
         """Initialize a service.
 
         Args:
@@ -25,7 +24,7 @@ class Service:
             build_file: Path to the service's build file
         """
         self.name = name
-        self.root_path = root_path or path or Path(".")
+        self.root_path = root_path or Path(".")
         self.language = language.lower()
         self.topics: Dict[str, KafkaTopic] = {}
         self.schemas: Dict[str, "Schema"] = {}  # Forward reference
@@ -51,7 +50,7 @@ class Service:
         if is_consumer:
             topic.consumers.add(self.name)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, Service):
             return False
 
@@ -62,11 +61,11 @@ class Service:
             and self.topics == other.topics
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Service({self.name}, {self.language}, {len(self.topics)} topics)"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()

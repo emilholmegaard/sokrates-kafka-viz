@@ -132,5 +132,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Output file
+# Output file / Debug
 analysis_output.json
+architecture.html
+debug.txt

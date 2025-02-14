@@ -101,16 +101,14 @@ def test_analyze_spring_cloud_stream_bindings(
     sample_service.root_path = tmp_path
 
     # Analyze the files
-    topics = spring_analyzer.analyze(java_file, sample_service)
+    analysis_result = spring_analyzer.analyze(java_file, sample_service)
 
-    assert len(topics) == 2
-    assert "output-channel" in topics
-    assert "input-channel" in topics
-    print(sample_service.name)
-    print(topics)
+    assert len(analysis_result.topics) == 2
+    assert "output-channel" in analysis_result.topics
+    assert "input-channel" in analysis_result.topics
 
-    assert sample_service.name in topics["output-channel"].producers
-    assert sample_service.name in topics["input-channel"].consumers
+    assert sample_service.name in analysis_result.topics["output-channel"].producers
+    assert sample_service.name in analysis_result.topics["input-channel"].consumers
 
 
 def test_analyze_kafka_listeners(spring_analyzer, sample_service, tmp_path):
@@ -124,8 +122,8 @@ def test_analyze_kafka_listeners(spring_analyzer, sample_service, tmp_path):
     """
     )
 
-    topics = spring_analyzer.analyze(java_file, sample_service)
+    analysis_result = spring_analyzer.analyze(java_file, sample_service)
 
-    assert len(topics) == 1
-    assert "user-events" in topics
-    assert sample_service.name in topics["user-events"].consumers
+    assert len(analysis_result.topics) == 1
+    assert "user-events" in analysis_result.topics
+    assert sample_service.name in analysis_result.topics["user-events"].consumers

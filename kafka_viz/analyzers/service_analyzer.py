@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from ..models.service import Service
+from ..models.service_registry import AnalysisResult, ServiceRelationship
 from .base_analyzer import BaseAnalyzer
 from .service_name_extractors import (
     CSharpServiceNameExtractor,
@@ -36,21 +37,20 @@ class ServiceAnalyzer(BaseAnalyzer):
             "csharp": CSharpServiceNameExtractor(),
         }
         self.test_dirs = {"test", "tests", "src/test", "src/tests"}
-        self._discovered_services: Dict[str, Service] = (
-            {}
-        )  # Service name to Service object mapping
 
-    def find_services(self, source_dir: Path) -> Dict[str, Service]:
+    def find_services(self, source_dir: Path) -> AnalysisResult:
         """Find all microservices in the given source directory.
 
         Args:
             source_dir: Root directory containing microservices
 
         Returns:
-            Dictionary mapping service names to Service objects
+            AnalysisResult containing discovered services and their relationships
         """
+        result = AnalysisResult(
+            affected_service="root"
+        )  # Special case for service discovery
         root_path = Path(source_dir)
-        services = {}
 
         # Track processed directories to avoid duplicate services
         processed_dirs: Set[Path] = set()
@@ -67,16 +67,44 @@ class ServiceAnalyzer(BaseAnalyzer):
 
             service = self._detect_service(path)
             if service:
-                services[service.name] = service
+                result.discovered_services[service.name] = service
                 processed_dirs.add(path)
                 # Add all parent directories to processed to avoid duplicate detection
                 processed_dirs.update(path.parents)
 
-        logger.debug(f"Found {len(services)} services in {root_path}")
-        self._discovered_services = services
-        return services
+                # Analyze service for dependencies and add relationships
+                self._analyze_service_dependencies(service, result)
+
+        logger.debug(f"Found {len(result.discovered_services)} services in {root_path}")
+        return result
 
     def _detect_service(self, path: Path) -> Optional[Service]:
+        """Detect if path contains a service by looking for build files."""
+        if not path.is_dir():
+            return None
+
+        for language, patterns in self.build_patterns.items():
+            for pattern in patterns:
+                build_file = path / pattern
+                if build_file.exists():
+                    name = self._extract_service_name(build_file, language)
+                    if name:
+                        logger.debug(
+                            f"Found service '{name}' ({language}) in {build_file}"
+                        )
+                        service = self._create_service(path, name, language, build_file)
+                        if service:
+                            logger.debug(
+                                f"Successfully created service object for {name}"
+                            )
+                            return service
+                        else:
+                            logger.warning(
+                                f"Failed to create service object for {name}"
+                            )
+        return None
+
+    def _detect_service_old(self, path: Path) -> Optional[Service]:
         """Detect if path contains a service by looking for build files."""
         if not path.is_dir():
             return None
@@ -96,29 +124,34 @@ class ServiceAnalyzer(BaseAnalyzer):
     def _create_service(
         self, path: Path, name: str, language: str, build_file: Path
     ) -> Service:
-        """Create a Service object and collect its source files."""
+        """Create a Service object with proper initialization."""
         service = Service(
             name=name,
             root_path=path,
             language=language,
             build_file=build_file,
         )
+        logger.debug(f"Creating service {name} at path {path} with language {language}")
 
+        # Add source files
         extensions = {
-            "java": [".java", ".kt", ".scala"],
-            "javascript": [".js", ".ts"],
+            "java": [".java"],
             "python": [".py"],
+            "javascript": [".js", ".ts"],
             "csharp": [".cs"],
-        }
+        }.get(language, [])
 
-        for ext in extensions.get(language, []):
-            for source_file in path.rglob(f"*{ext}"):
-                relative_path = source_file.relative_to(path)
-                is_test_file = any(
-                    str(relative_path).startswith(test_dir)
+        for ext in extensions:
+            found_files = list(path.rglob(f"*{ext}"))
+            logger.debug(
+                f"Found {len(found_files)} files with extension {ext}: {found_files}"
+            )
+
+            for source_file in found_files:
+                if not any(
+                    str(source_file).startswith(str(path / test_dir))
                     for test_dir in self.test_dirs
-                )
-                if not is_test_file:
+                ):
                     service.source_files.add(source_file)
 
         return service
@@ -134,128 +167,153 @@ class ServiceAnalyzer(BaseAnalyzer):
             return build_file.parent.name
         return None
 
-    def _analyze_java_service(self, service: Service) -> None:
-        """Analyze Java-based service for dependencies."""
-        # Look for Spring Cloud Stream bindings
-        for java_file in service.root_path.rglob("*.java"):
-            with open(java_file) as f:
-                content = f.read()
-                # Check for Spring Cloud Stream annotations
-                if "@EnableBinding" in content:
-                    # Extract topics from bindings
-                    pass
+    def _analyze_service_dependencies(
+        self, service: Service, result: AnalysisResult
+    ) -> None:
+        """Analyze service for dependencies and add to results."""
+        if service.language == "java":
+            self._analyze_java_service(service, result)
+        elif service.language == "javascript":
+            self._analyze_node_service(service, result)
+        elif service.language == "python":
+            self._analyze_python_service(service, result)
 
-    def _analyze_node_service(self, service: Service) -> None:
+    def _analyze_java_service(self, service: Service, result: AnalysisResult) -> None:
+        """Analyze Java-based service for dependencies."""
+        # Check for Spring Cloud dependencies in pom.xml
+        pom_file = service.root_path / "pom.xml"
+        if pom_file.exists():
+            try:
+                content = pom_file.read_text()
+                if "spring-cloud" in content:
+                    # Look for Spring Cloud Stream bindings
+                    self._analyze_spring_cloud_bindings(service, result)
+            except Exception as e:
+                logger.warning(f"Error analyzing pom.xml for {service.name}: {e}")
+
+    def _analyze_spring_cloud_bindings(
+        self, service: Service, result: AnalysisResult
+    ) -> None:
+        """Analyze Spring Cloud Stream bindings in configuration."""
+        config_files = [
+            service.root_path / "src/main/resources/application.yml",
+            service.root_path / "src/main/resources/application.yaml",
+            service.root_path / "src/main/resources/application.properties",
+        ]
+
+        for config_file in config_files:
+            if config_file.exists():
+                try:
+                    content = config_file.read_text()
+                    # Look for service dependencies in configuration
+                    service_pattern = re.compile(r"([\w-]+)\.url\s*=\s*([^\s]+)")
+
+                    for match in service_pattern.finditer(content):
+                        dep_service_name = match.group(1)
+                        service_url = match.group(2)
+
+                        # Add as discovered service if not already known
+                        if dep_service_name not in result.discovered_services:
+                            dep_service = Service(
+                                name=dep_service_name, root_path=service.root_path
+                            )
+                            result.discovered_services[dep_service_name] = dep_service
+
+                        # Add relationship
+                        relationship = ServiceRelationship(
+                            source=service.name,
+                            target=dep_service_name,
+                            type="spring-cloud",  # Changed from type_ to type
+                            details={"url": service_url},
+                        )
+                        result.service_relationships.append(relationship)
+
+                except Exception as e:
+                    logger.warning(f"Error analyzing config file {config_file}: {e}")
+
+    def _analyze_node_service(self, service: Service, result: AnalysisResult) -> None:
         """Analyze Node.js service for dependencies."""
         package_json = service.root_path / "package.json"
         if package_json.exists():
-            with open(package_json) as f:
-                data = json.load(f)
-                # Check for Kafka-related dependencies
+            try:
+                with open(package_json) as f:
+                    data = json.load(f)
                 deps = {
                     **data.get("dependencies", {}),
                     **data.get("devDependencies", {}),
                 }
-                kafka_deps = [d for d in deps if "kafka" in d.lower()]
-                if kafka_deps:
-                    # Service uses Kafka, analyze source files
-                    pass
 
-    def _analyze_python_service(self, service: Service) -> None:
+                # Look for microservice-related dependencies
+                service_deps = [
+                    d
+                    for d in deps
+                    if any(
+                        keyword in d.lower() for keyword in ["service", "client", "api"]
+                    )
+                ]
+
+                for dep in service_deps:
+                    # Convert npm package names to service names
+                    service_name = dep.replace("@", "").replace("/", "-")
+
+                    # Add as discovered service
+                    if service_name not in result.discovered_services:
+                        dep_service = Service(
+                            name=service_name, root_path=service.root_path
+                        )
+                        result.discovered_services[service_name] = dep_service
+
+                    # Add relationship
+                    relationship = ServiceRelationship(
+                        source=service.name,
+                        target=service_name,
+                        type="npm-dependency",  # Changed from type_ to type
+                        details={"version": deps[dep]},
+                    )
+                    result.service_relationships.append(relationship)
+
+            except Exception as e:
+                logger.warning(f"Error analyzing package.json for {service.name}: {e}")
+
+    def _analyze_python_service(self, service: Service, result: AnalysisResult) -> None:
         """Analyze Python service for dependencies."""
         requirements_file = service.root_path / "requirements.txt"
         if requirements_file.exists():
-            with open(requirements_file) as f:
-                content = f.read()
-                if "kafka" in content.lower():
-                    # Service uses Kafka, analyze source files
-                    pass
+            try:
+                content = requirements_file.read_text()
+                # Look for service-related dependencies
+                service_pattern = re.compile(
+                    r"^([a-zA-Z0-9-]+(?:-client|-service|-api))[>=<~]"
+                )
 
-    def _find_dependencies(self) -> None:
-        """Find dependencies between services based on shared topics."""
-        # This should be implemented as part of issue #13
-        pass
+                for match in service_pattern.finditer(content):
+                    service_name = match.group(1)
 
-    def get_service_by_name(self, service_name: str) -> Optional[Service]:
-        """Get a service by its name."""
-        return self._discovered_services.get(service_name)
+                    # Add as discovered service
+                    if service_name not in result.discovered_services:
+                        dep_service = Service(
+                            name=service_name, root_path=service.root_path
+                        )
+                        result.discovered_services[service_name] = dep_service
 
-    def get_services_by_language(self, language: str) -> Dict[str, Service]:
-        """Get services filtered by programming language.
+                    # Add relationship
+                    relationship = ServiceRelationship(
+                        source=service.name,
+                        target=service_name,
+                        type="python-dependency",  # Changed from type_ to type
+                    )
+                    result.service_relationships.append(relationship)
 
-         Args:
-            language: Programming language to filter by (e.g., 'java', 'python')
-
-        Returns:
-            Dict[str, Service]: Dictionary of services that use the specified language
-
-        Note:
-            This requires services to be discovered first using find_services()
-        """
-        if not self._discovered_services:
-            logger.warning("No services discovered yet. Call find_services() first.")
-            return {}
-
-        return {
-            name: service
-            for name, service in self._discovered_services.items()
-            if service.language.lower() == language.lower()
-        }
-
-    def get_services_with_schema(self, schema_name: str) -> Dict[str, Service]:
-        """Get services that use a specific schema.
-
-        Args:
-            schema_name: Name of the schema to search for (e.g., 'UserEvent.avsc')
-
-        Returns:
-            Dict[str, Service]: Dictionary of services that use the specified schema
-
-        Note:
-            This requires services to be discovered first using find_services()
-        """
-        if not self._discovered_services:
-            logger.warning("No services discovered yet. Call find_services() first.")
-            return {}
-
-        matching_services = {}
-
-        for name, service in self._discovered_services.items():
-            # Look for schema files in common schema locations
-            schema_locations = [
-                service.root_path / "src/main/avro",
-                service.root_path / "src/main/resources/avro",
-                service.root_path / "schemas",
-                service.root_path / "avro",
-            ]
-
-            # Check source files for schema references
-            schema_pattern = re.compile(
-                rf'(?:Schema|@AvroGenerated|schemaReference)\s*[=:]\s*["\'].*'
-                rf'{re.escape(schema_name)}["\']'
-            )
-
-            # Check if schema file exists in any location
-            schema_exists = any(
-                loc.exists() and any(f.name == schema_name for f in loc.glob("*.avsc"))
-                for loc in schema_locations
-            )
-
-            # Check if schema is referenced in source files
-            schema_referenced = any(
-                schema_pattern.search(source_file.read_text())
-                for source_file in service.source_files
-                if source_file.exists()
-            )
-
-            if schema_exists or schema_referenced:
-                matching_services[name] = service
-
-        return matching_services
+            except Exception as e:
+                logger.warning(
+                    f"Error analyzing requirements.txt for {service.name}: {e}"
+                )
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the service analyzer."""
         return {
-            "discovered_services": len(self._discovered_services),
             "supported_languages": list(self.build_patterns.keys()),
+            "test_directories": list(self.test_dirs),
+            "analyzer_type": self.__class__.__name__,
+            "status": "active",
         }

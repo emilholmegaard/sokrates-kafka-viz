@@ -1,2 +1,1 @@
 # Core dependencies
-# Currently empty as we don't have any runtime dependencies

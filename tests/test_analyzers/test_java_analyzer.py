@@ -15,7 +15,7 @@ def analyzer() -> JavaAnalyzer:
 
 @pytest.fixture
 def test_service():
-    return Service("test-service", Path("/tmp/test"))
+    return Service(name="test-service", root_path=Path("/tmp/test"))
 
 
 def test_can_analyze(analyzer) -> None:
@@ -42,11 +42,11 @@ def test_plain_kafka_producer(analyzer, test_service, tmp_path) -> None:
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert test_service.name in topics["orders"].producers
-    assert not topics["orders"].consumers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].producers
+    assert not analysis_result.topics["orders"].consumers
 
 
 def test_plain_kafka_consumer(analyzer, test_service, tmp_path) -> None:
@@ -63,11 +63,11 @@ def test_plain_kafka_consumer(analyzer, test_service, tmp_path) -> None:
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert test_service.name in topics["orders"].consumers
-    assert not topics["orders"].producers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].consumers
+    assert not analysis_result.topics["orders"].producers
 
 
 def test_spring_kafka_annotations(analyzer, test_service, tmp_path) -> None:
@@ -87,12 +87,12 @@ def test_spring_kafka_annotations(analyzer, test_service, tmp_path) -> None:
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert "processed-orders" in topics
-    assert test_service.name in topics["orders"].consumers
-    assert test_service.name in topics["processed-orders"].producers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert "processed-orders" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].consumers
+    assert test_service.name in analysis_result.topics["processed-orders"].producers
 
 
 def test_spring_cloud_stream_annotations(analyzer, test_service, tmp_path) -> None:
@@ -112,12 +112,12 @@ def test_spring_cloud_stream_annotations(analyzer, test_service, tmp_path) -> No
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert "processed-orders" in topics
-    assert test_service.name in topics["orders"].consumers
-    assert test_service.name in topics["processed-orders"].producers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert "processed-orders" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].consumers
+    assert test_service.name in analysis_result.topics["processed-orders"].producers
 
 
 def test_topic_constants(analyzer, test_service, tmp_path) -> None:
@@ -137,12 +137,12 @@ def test_topic_constants(analyzer, test_service, tmp_path) -> None:
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert "processed-orders" in topics
-    assert test_service.name in topics["orders"].producers
-    assert test_service.name in topics["processed-orders"].consumers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert "processed-orders" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].producers
+    assert test_service.name in analysis_result.topics["processed-orders"].consumers
 
 
 def test_spring_config_topics(analyzer, test_service, tmp_path) -> None:
@@ -164,9 +164,9 @@ def test_spring_config_topics(analyzer, test_service, tmp_path) -> None:
     test_service.root_path = tmp_path
 
     # Spring config topics need special handling as they're resolved at runtime
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert len(topics) > 0
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert len(analysis_result.topics) > 0
 
 
 def test_multi_topic_declaration(analyzer, test_service, tmp_path) -> None:
@@ -185,9 +185,9 @@ def test_multi_topic_declaration(analyzer, test_service, tmp_path) -> None:
     file_path.write_text(content)
     test_service.root_path = tmp_path
 
-    topics = analyzer.analyze(file_path, test_service)
-    assert topics is not None
-    assert "orders" in topics
-    assert "returns" in topics
-    assert test_service.name in topics["orders"].consumers
-    assert test_service.name in topics["returns"].consumers
+    analysis_result = analyzer.analyze(file_path, test_service)
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert "returns" in analysis_result.topics
+    assert test_service.name in analysis_result.topics["orders"].consumers
+    assert test_service.name in analysis_result.topics["returns"].consumers

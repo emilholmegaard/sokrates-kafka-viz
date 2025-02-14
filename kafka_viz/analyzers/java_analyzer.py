@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from ..models.schema import KafkaTopic
 from ..models.service import Service
-from .analyzer import Analyzer, KafkaPatterns
+from .analyzer import AnalysisResult, Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +188,9 @@ class JavaAnalyzer(Analyzer):
 
         return self.topics
 
-    def analyze_file(self, file_path: Path) -> Dict[str, KafkaTopic]:
+    def analyze_file(self, file_path: Path) -> AnalysisResult:
         """Analyze a Java file for Kafka topics."""
-        service = Service(name=file_path.parent.name, path=file_path.parent)
+        service = Service(name=file_path.parent.name, root_path=file_path.parent)
         return self.analyze(file_path, service)
 
     def get_debug_info(self) -> Dict[str, Any]:

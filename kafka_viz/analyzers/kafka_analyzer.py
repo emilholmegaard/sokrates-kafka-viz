@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from kafka_viz.models import KafkaTopic, Service
 
-from .analyzer import Analyzer, KafkaPatterns
+from .analyzer import AnalysisResult, Analyzer, KafkaPatterns
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,8 @@ class KafkaAnalyzer(Analyzer):
                 "tests/test_data" in str(file_path)
             ):
                 try:
-                    found_topics = self.analyze(file_path, service)
+                    analysis_result = self.analyze(file_path, service)
+                    found_topics = analysis_result.topics
                     if found_topics:
                         for topic_name, topic in found_topics.items():
                             if topic_name not in service.topics:
@@ -154,7 +155,7 @@ class KafkaAnalyzer(Analyzer):
 
         return service.topics
 
-    def analyze(self, file_path: Path, service: Service) -> Dict[str, KafkaTopic]:
+    def analyze(self, file_path: Path, service: Service) -> AnalysisResult:
         """Analyze Java file for Kafka patterns."""
         self.analyzed_files.add(file_path)
         content = file_path.read_text()
@@ -199,7 +200,11 @@ class KafkaAnalyzer(Analyzer):
             for match in re.finditer(pattern, content):
                 process_match(match, False)
 
-        return topics
+        analysis_result = AnalysisResult(affected_service=service.name)
+        analysis_result.topics = topics
+        analysis_result.affected_service = service.name
+
+        return analysis_result
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the Kafka analysis."""

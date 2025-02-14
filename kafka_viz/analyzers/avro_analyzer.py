@@ -39,6 +39,9 @@ class AvroAnalyzer(BaseAnalyzer):
         """
         schemas: Dict[str, AvroSchema] = {}
 
+        if not isinstance(directory, Path):
+            directory = Path(directory)
+
         # Find .avsc files
         for avsc_file in directory.rglob("*.avsc"):
             schema = self.parse_avsc_file(avsc_file)

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -42,13 +43,43 @@ class AnalyzerManager:
         self.logger.info(f"Starting service discovery in {source_dir}")
         services = ServiceCollection()
         discovered_services = self.service_analyzer.find_services(source_dir)
-        self.logger.debug(f"Initially discovered {len(discovered_services)} services")
 
-        for service_name, service in discovered_services.items():
+        # Convert discovered_services to a dictionary if it's not already
+        if hasattr(discovered_services, "services"):
+            service_dict = discovered_services.services
+        else:
+            service_dict = discovered_services
+
+        if not service_dict.discovered_services:
+            self.logger.warning("No services discovered")
+            return services
+
+        # Debug log moved here after conversion to dictionary
+        self.logger.debug(
+            f"Initially discovered {len(service_dict.discovered_services)} services"
+        )
+
+        # Process each discovered service
+        for service in service_dict.discovered_services.values():
             self.logger.debug(
-                f"Adding service: {service_name} at path {service.root_path}"
+                f"Adding service: {service.name} at path {service.root_path}"
             )
-            services.add_service(service)
+            if isinstance(service.root_path, str):
+                root_path = Path(service.root_path)
+            else:
+                root_path = service.root_path
+            service.root_path = root_path
+            # Create a new service entry with proper metadata
+            new_service = Service(
+                name=service.name,
+                root_path=service.root_path,
+                language=service.language,
+            )
+
+            new_service.source_files = service.source_files.copy()
+
+            # Let service discovery add source files to the Service description
+            services.add_service(new_service)
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"
@@ -57,42 +88,61 @@ class AnalyzerManager:
 
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
-        self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
-        schemas = self.schema_analyzer.analyze_directory(service.root_path)
-        if schemas:
-            self.logger.debug(
-                f"Found {len(schemas)} schemas for service at {service.root_path}"
+
+        try:
+            self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
+            schemas = self.schema_analyzer.analyze_directory(service.root_path)
+            if schemas:
+                self.logger.debug(
+                    f"Found {len(schemas)} schemas for service at {service.root_path}"
+                )
+                service.schemas.update(schemas)
+        except Exception as e:
+            self.logger.error(
+                f"Error analyzing schemas for service {service.name}: {e}"
             )
-            for schema_name in schemas:
-                self.logger.debug(f"Found schema: {schema_name}")
-        service.schemas.update(schemas)
 
     def analyze_file(
         self, file_path: Path, service: Service
     ) -> Optional[Dict[str, KafkaTopic]]:
         """Analyze a file using all available file-level analyzers."""
         self.logger.debug(f"Analyzing file: {file_path}")
+        if not file_path.exists():
+            self.logger.warning(f"File does not exist: {file_path}")
+            return None
+        if not file_path.is_file():
+            self.logger.warning(f"Path is not a file: {file_path}")
+            return None
         all_topics = {}
 
         for analyzer in self.file_analyzers:
             try:
-                topics = analyzer.analyze(file_path, service)
-                if topics:
+                analysis_result = analyzer.analyze(file_path, service)
+                if analysis_result:
                     self.logger.debug(
                         f"Analyzer {analyzer.__class__.__name__} found "
-                        f"{len(topics)} topics in {file_path}"
+                        f"{len(analysis_result.topics)} topics in {file_path}"
                     )
-                    for topic_name, topic in topics.items():
+                    for topic_name, topic in analysis_result.topics.items():
                         if topic_name not in all_topics:
                             self.logger.debug(f"New topic found: {topic_name}")
                             all_topics[topic_name] = topic
                         else:
-                            self.logger.debug(
-                                f"Merging additional info for topic: {topic_name}"
-                            )
-                            # Merge producers and consumers
-                            all_topics[topic_name].producers.update(topic.producers)
-                            all_topics[topic_name].consumers.update(topic.consumers)
+                            existing_topic = all_topics[topic_name]
+                            # Merge producers
+                            for producer in topic.producers:
+                                if producer not in existing_topic.producers:
+                                    existing_topic.producers.add(producer)
+                                    existing_topic.producer_locations.update(
+                                        topic.producer_locations
+                                    )
+                            # Merge consumers
+                            for consumer in topic.consumers:
+                                if consumer not in existing_topic.consumers:
+                                    existing_topic.consumers.add(consumer)
+                                    existing_topic.consumer_locations.update(
+                                        topic.consumer_locations
+                                    )
             except Exception as e:
                 self.logger.warning(
                     f"Error in analyzer {analyzer.__class__.__name__} for file {file_path}: {e}"
@@ -127,21 +177,32 @@ class AnalyzerManager:
                     "path": str(svc.root_path),
                     "language": svc.language,
                     "topics": {
-                        topic.name: {
-                            "producers": list(topic.producers),
-                            "consumers": list(topic.consumers),
+                        topic_name: {
+                            "producers": sorted(list(topic.producers)),
+                            "consumers": sorted(list(topic.consumers)),
+                            "producer_locations": {
+                                str(producer): [str(loc) for loc in locations]
+                                for producer, locations in topic.producer_locations.items()
+                            },
+                            "consumer_locations": {
+                                str(consumer): [str(loc) for loc in locations]
+                                for consumer, locations in topic.consumer_locations.items()
+                            },
                         }
-                        for topic in svc.topics.values()
+                        for topic_name, topic in svc.topics.items()
                     },
                     "schemas": {
-                        schema.name: {
+                        str(schema.name): {
                             "type": (
                                 "avro"
                                 if schema.__class__.__name__ == "AvroSchema"
                                 else "dto"
                             ),
-                            "namespace": getattr(schema, "namespace", ""),
-                            "fields": schema.fields,
+                            "namespace": str(getattr(schema, "namespace", "")),
+                            "fields": {
+                                str(k): str(v) if isinstance(v, Path) else v
+                                for k, v in schema.fields.items()
+                            },
                         }
                         for schema in svc.schemas.values()
                     },
@@ -156,6 +217,9 @@ class AnalyzerManager:
                 f"Service {service_name}: {len(service_data['topics'])} topics, "
                 f"{len(service_data['schemas'])} schemas"
             )
+
+        result["generated"] = datetime.now().isoformat()
+        self.logger.debug(f"Added generated timestamp: {result['generated']}")
 
         if include_debug:
             result["debug_info"] = self.get_debug_info()
@@ -172,8 +236,25 @@ class AnalyzerManager:
         """Generate and save analysis results to a JSON file."""
         self.logger.info(f"Saving analysis results to {output_path}")
         result = self.generate_output(services, include_debug)
+
+        # Convert all Path objects to strings recursively
+        def convert_paths(obj) -> Any:
+            if isinstance(obj, dict):
+                return {str(k): convert_paths(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_paths(item) for item in obj]
+            elif isinstance(obj, set):
+                return [convert_paths(item) for item in obj]
+            elif isinstance(obj, Path):
+                return str(obj)
+            return obj
+
+        # Convert all paths before serialization
+        result = convert_paths(result)
+
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
+
         self.logger.info("Successfully saved analysis results")
 
     def get_debug_info(self) -> List[Dict[str, Any]]:

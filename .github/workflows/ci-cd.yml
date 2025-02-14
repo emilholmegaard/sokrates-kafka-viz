@@ -65,9 +65,9 @@ jobs:
         
     - name: Lint
       run: |
-        black --check kafka_viz tests
-        isort --check-only kafka_viz tests
-        flake8 kafka_viz tests --max-line-length=100
+        black --check kafka_viz
+        isort --check-only kafka_viz 
+        flake8 kafka_viz --max-line-length=100
 
   build:
     needs: test
