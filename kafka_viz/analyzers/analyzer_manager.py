@@ -84,7 +84,6 @@ class AnalyzerManager:
             )
             # Let service discovery add source files to the Service description
             services.add_service(new_service)
-            service_dict.discovered_services[service.name] = new_service
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"

@@ -92,6 +92,32 @@ class ServiceAnalyzer(BaseAnalyzer):
                         logger.debug(
                             f"Found service '{name}' ({language}) in {build_file}"
                         )
+                        service = self._create_service(path, name, language, build_file)
+                        if service:
+                            logger.debug(
+                                f"Successfully created service object for {name}"
+                            )
+                            return service
+                        else:
+                            logger.warning(
+                                f"Failed to create service object for {name}"
+                            )
+        return None
+
+    def _detect_service_old(self, path: Path) -> Optional[Service]:
+        """Detect if path contains a service by looking for build files."""
+        if not path.is_dir():
+            return None
+
+        for language, patterns in self.build_patterns.items():
+            for pattern in patterns:
+                build_file = path / pattern
+                if build_file.exists():
+                    name = self._extract_service_name(build_file, language)
+                    if name:
+                        logger.debug(
+                            f"Found service '{name}' ({language}) in {build_file}"
+                        )
                         return self._create_service(path, name, language, build_file)
         return None
 

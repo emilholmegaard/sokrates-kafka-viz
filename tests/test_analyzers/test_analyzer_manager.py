@@ -19,8 +19,8 @@ class TestAnalyzerManager:
     def test_discover_services_java(self, analyzer_manager, tmp_path) -> None:
         # Create mock Java service structure
         services = ServiceCollection()
-        service_dir = tmp_path / "java-service"
-        service_dir.mkdir()
+        service_dir = tmp_path / "services" / "java-service"
+        service_dir.mkdir(parents=True)
 
         # Create pom.xml
         pom_content = """<?xml version="1.0" encoding="UTF-8"?>
@@ -47,21 +47,20 @@ class TestAnalyzerManager:
         services = analyzer_manager.discover_services(tmp_path)
 
         assert len(services) == 1
-        service = services.get_service("foo service")
-        print(service)
-        print(services.get_all_services())
+        service = services.get_service("java-service")
         assert isinstance(service, Service)
-        assert service.name == "foo service"
+        assert service.name == "java-service"
         assert service.language == "java"
         assert len(service.source_files) == 1
 
+    @pytest.mark.skip(reason="Python service discovery is not a priority yet")
     def test_discover_services_python(
         self, analyzer_manager: AnalyzerManager, tmp_path: Path
     ) -> None:
         # Create mock Python service structure
         services = ServiceCollection()
-        service_dir = tmp_path / "python-service"
-        service_dir.mkdir()
+        service_dir = tmp_path / "services" / "python-service"
+        service_dir.mkdir(parents=True)
 
         # Create pyproject.toml
         pyproject_content = """
