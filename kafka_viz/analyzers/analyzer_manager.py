@@ -227,7 +227,7 @@ class AnalyzerManager:
             )
 
         result["generated"] = datetime.now().isoformat()
-        self.logger.debug(f"Added timestamp: {result['timestamp']}")
+        self.logger.debug(f"Added generated timestamp: {result['generated']}")
 
         if include_debug:
             result["debug_info"] = self.get_debug_info()
