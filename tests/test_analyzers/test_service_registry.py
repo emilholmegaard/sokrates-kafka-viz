@@ -71,7 +71,7 @@ def test_spring_analyzer_integration() -> None:
         @EnableBinding(MyChannels.class)
         public interface MyChannels {
             @Input("input-channel")
-            SubscribableChannel input();           
+            SubscribableChannel input();
             @Output("output-channel")
             MessageChannel output();
         }
