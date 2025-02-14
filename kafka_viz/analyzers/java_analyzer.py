@@ -190,7 +190,7 @@ class JavaAnalyzer(Analyzer):
 
     def analyze_file(self, file_path: Path) -> Dict[str, KafkaTopic]:
         """Analyze a Java file for Kafka topics."""
-        service = Service(name=file_path.parent.name, path=file_path.parent)
+        service = Service(name=file_path.parent.name, root_path=file_path.parent)
         return self.analyze(file_path, service)
 
     def get_debug_info(self) -> Dict[str, Any]:
