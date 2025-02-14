@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from kafka_viz.analyzers.kafka_analyzer import KafkaAnalyzer
 from kafka_viz.models.service import Service
+from kafka_viz.models.service_registry import AnalysisResult  # Add this import
 
 
-def test_java_patterns(test_data_dir):
+def test_java_patterns(test_data_dir: Path) -> None:
     analyzer = KafkaAnalyzer()
     service_path = test_data_dir / "java_service"
     java_service = Service(name="java-service", root_path=service_path, language="java")
