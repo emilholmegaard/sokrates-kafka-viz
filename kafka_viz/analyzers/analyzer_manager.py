@@ -122,13 +122,13 @@ class AnalyzerManager:
 
         for analyzer in self.file_analyzers:
             try:
-                topics = analyzer.analyze(file_path, service)
-                if topics:
+                analysis_result = analyzer.analyze(file_path, service)
+                if analysis_result:
                     self.logger.debug(
                         f"Analyzer {analyzer.__class__.__name__} found "
-                        f"{len(topics)} topics in {file_path}"
+                        f"{len(analysis_result.topics)} topics in {file_path}"
                     )
-                    for topic_name, topic in topics.items():
+                    for topic_name, topic in analysis_result.topics.items():
                         if topic_name not in all_topics:
                             self.logger.debug(f"New topic found: {topic_name}")
                             all_topics[topic_name] = topic
