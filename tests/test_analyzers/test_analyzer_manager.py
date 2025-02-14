@@ -53,7 +53,9 @@ class TestAnalyzerManager:
         assert service.language == "java"
         assert len(service.source_files) == 1
 
-    def test_discover_services_python(self, analyzer_manager, tmp_path) -> None:
+    def test_discover_services_python(
+        self, analyzer_manager: AnalyzerManager, tmp_path: Path
+    ) -> None:
         # Create mock Python service structure
         services = ServiceCollection()
         service_dir = tmp_path / "python-service"
@@ -121,9 +123,9 @@ class TestAnalyzerManager:
         """
         )
 
-        topics = analyzer_manager.analyze_file(test_file, mock_service)
-        assert topics is not None
-        assert "test-topic" in topics
+        analysis_result = analyzer_manager.analyze_file(test_file, mock_service)
+        assert analysis_result is not None
+        assert "test-topic" in analysis_result.topics
 
     def test_generate_output(self, analyzer_manager) -> None:
         services = ServiceCollection()
@@ -157,5 +159,5 @@ class TestAnalyzerManager:
         invalid_file.write_text("invalid content")
 
         # Should not raise exception
-        topics = analyzer_manager.analyze_file(invalid_file, mock_service)
-        assert topics is None
+        analysis_result = analyzer_manager.analyze_file(invalid_file, mock_service)
+        assert analysis_result is None

@@ -42,15 +42,35 @@ class AnalyzerManager:
         self.logger.info(f"Starting service discovery in {source_dir}")
         services = ServiceCollection()
         discovered_services = self.service_analyzer.find_services(source_dir)
-        self.logger.debug(f"Initially discovered {len(discovered_services)} services")
+
+        # Convert discovered_services to a dictionary if it's not already
+        if hasattr(discovered_services, "services"):
+            service_dict = discovered_services.services
+        else:
+            service_dict = discovered_services
+
+        if not service_dict.discovered_services:
+            self.logger.warning("No services discovered")
+            return services
+
+        # Debug log moved here after conversion to dictionary
+        self.logger.debug(
+            f"Initially discovered {len(service_dict.discovered_services)} services"
+        )
 
         # Process each discovered service
-        for service_name, service in discovered_services.items():
+        for service in service_dict.discovered_services.values():
             self.logger.debug(
-                f"Adding service: {service_name} at path {service.root_path}"
+                f"Adding service: {service.name} at path {service.root_path}"
             )
+            root_path = Path(service.root_path)
+            service.root_path = root_path
             # Create a new service entry with proper metadata
-            new_service = Service(service.root_path, service.name, service.language)
+            new_service = Service(
+                name=service.name,
+                root_path=service.root_path,
+                language=service.language,
+            )
             new_service.pom_path = (
                 service.pom_path if hasattr(service, "pom_path") else None
             )
@@ -60,6 +80,7 @@ class AnalyzerManager:
                 else None
             )
             services.add_service(new_service)
+            service_dict.discovered_services[service.name] = new_service
 
         self.logger.info(
             f"Completed service discovery. Found {len(services.services)} services"
@@ -68,8 +89,11 @@ class AnalyzerManager:
 
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
+
         self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
+
         schemas = self.schema_analyzer.analyze_directory(service.root_path)
+        self.logger.debug(f"Schemas object: {schemas}")
         if schemas:
             self.logger.debug(
                 f"Found {len(schemas)} schemas for service at {service.root_path}"
@@ -83,6 +107,12 @@ class AnalyzerManager:
     ) -> Optional[Dict[str, KafkaTopic]]:
         """Analyze a file using all available file-level analyzers."""
         self.logger.debug(f"Analyzing file: {file_path}")
+        if not file_path.exists():
+            self.logger.warning(f"File does not exist: {file_path}")
+            return None
+        if not file_path.is_file():
+            self.logger.warning(f"Path is not a file: {file_path}")
+            return None
         all_topics = {}
 
         for analyzer in self.file_analyzers:
@@ -151,25 +181,28 @@ class AnalyzerManager:
                             "producers": sorted(list(topic.producers)),
                             "consumers": sorted(list(topic.consumers)),
                             "producer_locations": {
-                                producer: locations
+                                str(producer): [str(loc) for loc in locations]
                                 for producer, locations in topic.producer_locations.items()
                             },
                             "consumer_locations": {
-                                consumer: locations
+                                str(consumer): [str(loc) for loc in locations]
                                 for consumer, locations in topic.consumer_locations.items()
                             },
                         }
                         for topic_name, topic in svc.topics.items()
                     },
                     "schemas": {
-                        schema.name: {
+                        str(schema.name): {
                             "type": (
                                 "avro"
                                 if schema.__class__.__name__ == "AvroSchema"
                                 else "dto"
                             ),
-                            "namespace": getattr(schema, "namespace", ""),
-                            "fields": schema.fields,
+                            "namespace": str(getattr(schema, "namespace", "")),
+                            "fields": {
+                                str(k): str(v) if isinstance(v, Path) else v
+                                for k, v in schema.fields.items()
+                            },
                         }
                         for schema in svc.schemas.values()
                     },
@@ -201,16 +234,24 @@ class AnalyzerManager:
         self.logger.info(f"Saving analysis results to {output_path}")
         result = self.generate_output(services, include_debug)
 
-        # Handle encoding of Path objects and sets
-        def json_encoder(obj):
-            if isinstance(obj, Path):
+        # Convert all Path objects to strings recursively
+        def convert_paths(obj) -> Any:
+            if isinstance(obj, dict):
+                return {str(k): convert_paths(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_paths(item) for item in obj]
+            elif isinstance(obj, set):
+                return [convert_paths(item) for item in obj]
+            elif isinstance(obj, Path):
                 return str(obj)
-            if isinstance(obj, set):
-                return list(obj)
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+            return obj
+
+        # Convert all paths before serialization
+        result = convert_paths(result)
 
         with open(output_path, "w") as f:
-            json.dump(result, f, indent=2, default=json_encoder)
+            json.dump(result, f, indent=2)
+
         self.logger.info("Successfully saved analysis results")
 
     def get_debug_info(self) -> List[Dict[str, Any]]:

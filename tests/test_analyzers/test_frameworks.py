@@ -12,14 +12,14 @@ def test_spring_cloud_stream_analyzer(spring_service_dir):
     processor_file = (
         spring_service_dir / "src/main/java/com/example/OrderProcessor.java"
     )
-    topics = analyzer.analyze(processor_file, service)
+    analysis_result = analyzer.analyze(processor_file, service)
 
-    assert topics is not None
-    assert "orders" in topics
-    assert "processed-orders" in topics
+    assert analysis_result is not None
+    assert "orders" in analysis_result.topics
+    assert "processed-orders" in analysis_result.topics
 
-    assert service.name in topics["orders"].consumers
-    assert service.name in topics["processed-orders"].producers
+    assert service.name in analysis_result.topics["orders"].consumers
+    assert service.name in analysis_result.topics["processed-orders"].producers
 
 
 def test_spring_analyzer_ignore_test_files():
@@ -27,7 +27,7 @@ def test_spring_analyzer_ignore_test_files():
     service = Service(name="spring-service", path=Path("."))
 
     test_file = Path("OrderProcessorTest.java")
-    topics = analyzer.analyze(test_file, service)
+    analysis_result = analyzer.analyze(test_file, service)
 
     # Should return empty dict for test files
-    assert topics == {}
+    assert analysis_result.discovered_services == {}
