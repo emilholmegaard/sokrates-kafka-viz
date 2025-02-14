@@ -2,7 +2,6 @@ from pathlib import Path
 
 from kafka_viz.analyzers.kafka_analyzer import KafkaAnalyzer
 from kafka_viz.models.service import Service
-from kafka_viz.models.service_registry import AnalysisResult  # Add this import
 
 
 def test_java_patterns(test_data_dir: Path) -> None:
