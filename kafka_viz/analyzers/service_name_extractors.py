@@ -43,33 +43,34 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
         try:
             tree = ET.parse(pom_file)
             root = tree.getroot()
-            # Remove namespace for easier parsing
-            ns = (
-                {"mvn": re.match(r"\{.*\}", root.tag).group(0)}
-                if re.match(r"\{.*\}", root.tag)
-                else {}
-            )
+
+            # Extract namespace if present
+            match = re.match(r"\{.*\}", root.tag)
+            ns = {"mvn": match.group(0)} if match else {}
 
             def ns_path(p):
-                return p if not ns else p.replace("/", "/mvn:")
+                return p if not ns else f"mvn:{p}"
 
-            # First try artifact ID
+            # Try to extract artifactId
             artifact_id = root.find(ns_path("artifactId"), ns)
             if artifact_id is not None and artifact_id.text:
                 return self._sanitize_name(artifact_id.text)
 
-            # Then try name tag
+            # Try to extract name
             name = root.find(ns_path("name"), ns)
             if name is not None and name.text:
-                if name.text not in self.parent_artifact_ids:
-                    return self._sanitize_name(name.text)
+                return self._sanitize_name(name.text)
 
-            # Finally try the final directory name
+            # Use directory name as fallback
             dir_name = pom_file.parent.name
             if dir_name:
                 return self._sanitize_name(dir_name)
 
+        except ET.ParseError:
+            # Handle specific XML parsing errors
+            pass
         except Exception:
+            # Log or handle other exceptions if necessary
             pass
 
         return None

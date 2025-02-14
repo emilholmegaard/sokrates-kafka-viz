@@ -25,7 +25,7 @@ class TestAnalyzerManager:
         # Create pom.xml
         pom_content = """<?xml version="1.0" encoding="UTF-8"?>
         <project xmlns="http://maven.apache.org/POM/4.0.0">
-            <artifactId>service</artifactId>
+            <artifactId>foo service</artifactId>
         </project>
         """
         (service_dir / "pom.xml").write_text(pom_content)
@@ -47,11 +47,11 @@ class TestAnalyzerManager:
         services = analyzer_manager.discover_services(tmp_path)
 
         assert len(services) == 1
-        service = services.get_service("service")
+        service = services.get_service("foo service")
         print(service)
         print(services.get_all_services())
         assert isinstance(service, Service)
-        assert service.name == "service"
+        assert service.name == "foo service"
         assert service.language == "java"
         assert len(service.source_files) == 1
 
