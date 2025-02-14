@@ -1,10 +1,13 @@
 """Tests for ServiceRegistry integration."""
 
+# Standard library imports
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+# Third-party imports
 import pytest
 
+# Local application imports
 from kafka_viz.analyzers.analyzer_manager import AnalyzerManager
 from kafka_viz.analyzers.spring_analyzer import SpringCloudStreamAnalyzer
 from kafka_viz.models.schema import KafkaTopic
