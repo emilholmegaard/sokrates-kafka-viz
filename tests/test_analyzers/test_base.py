@@ -27,16 +27,16 @@ def test_base_analyzer_can_analyze(test_data_dir):
 
 def test_base_analyzer_find_topics(python_service_dir):
     analyzer = SimpleTestAnalyzer()
-    service = Service(name="test-service", path=python_service_dir)
+    service = Service(name="test-service", root_path=python_service_dir)
 
-    topics = analyzer.analyze(python_service_dir / "kafka_client.py", service)
+    analysis_result = analyzer.analyze(python_service_dir / "kafka_client.py", service)
 
-    assert topics is not None
-    assert "orders" in topics
-    assert "processed-orders" in topics
+    assert analysis_result.topics is not None
+    assert "orders" in analysis_result.topics
+    assert "processed-orders" in analysis_result.topics
 
-    orders_topic = topics["orders"]
+    orders_topic = analysis_result.topics["orders"]
     assert service.name in orders_topic.producers
 
-    processed_topic = topics["processed-orders"]
+    processed_topic = analysis_result.topics["processed-orders"]
     assert service.name in processed_topic.consumers

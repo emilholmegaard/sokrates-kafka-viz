@@ -107,7 +107,7 @@ def analyze(
             task = progress.add_task(
                 "Analyzing schemas...", total=len(services.services)
             )
-            for service_name, service in services.services.items():
+            for service in services.services.values():
                 logger.debug(f"Analyzing schemas for service: {service_name}")
                 analyzer_manager.analyze_schemas(service)
                 if service.schemas:
@@ -121,9 +121,9 @@ def analyze(
             task = progress.add_task(
                 "Analyzing source files...", total=len(services.services)
             )
-            for service_name, service in services.services.items():
+            for service in services.services.values():
                 logger.debug(
-                    f"Starting source file analysis for service: {service_name}"
+                    f"Starting source file analysis for service: {service.name}"
                 )
                 files_analyzed = 0
                 topics_found = 0

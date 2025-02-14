@@ -10,8 +10,7 @@ class Service:
     def __init__(
         self,
         name: str,
-        path: Optional[Path] = None,
-        root_path: Optional[Path] = None,  # Added for backward compatibility
+        root_path: Path,
         language: str = "unknown",
         build_file: Optional[Path] = None,
     ):
@@ -25,7 +24,7 @@ class Service:
             build_file: Path to the service's build file
         """
         self.name = name
-        self.root_path = root_path or path or Path(".")
+        self.root_path = root_path or Path(".")
         self.language = language.lower()
         self.topics: Dict[str, KafkaTopic] = {}
         self.schemas: Dict[str, "Schema"] = {}  # Forward reference
