@@ -32,7 +32,11 @@ class AnalysisResult:
     service_relationships: List[ServiceRelationship] = field(default_factory=list)
 
     def add_relationship(
-        self, source: str, target: str, type_: str, details: Optional[Dict] = None
+        self,
+        source: str,
+        target: str,
+        type_: str,
+        details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Helper method to add a relationship."""
         relationship = ServiceRelationship(source, target, type_, details)
@@ -45,7 +49,7 @@ class ServiceRegistry:
     def __init__(self) -> None:
         self._services: Dict[str, Service] = {}
         self._relationships: List[ServiceRelationship] = []
-        self.logger = logging.getLogger(__name__)
+        self.logger: logging.Logger = logging.getLogger(__name__)
 
     @property
     def services(self) -> Dict[str, Service]:
@@ -77,7 +81,11 @@ class ServiceRegistry:
         return self._services[name]
 
     def add_relationship(
-        self, source: str, target: str, type_: str, details: Optional[Dict] = None
+        self,
+        source: str,
+        target: str,
+        type_: str,
+        details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Add a relationship between services."""
         relationship = ServiceRelationship(source, target, type_, details)
@@ -88,7 +96,9 @@ class ServiceRegistry:
             self._relationships.append(relationship)
             self.logger.debug(f"Added {type_} relationship: {source} -> {target}")
 
-    def get_relationships(self, service_name: str = None) -> List[ServiceRelationship]:
+    def get_relationships(
+        self, service_name: Optional[str] = None
+    ) -> List[ServiceRelationship]:
         """Get all relationships or filter by service name."""
         if service_name is None:
             return self._relationships
@@ -98,7 +108,7 @@ class ServiceRegistry:
             if r.source == service_name or r.target == service_name
         ]
 
-    def apply_analysis_result(self, result: "AnalysisResult") -> None:
+    def apply_analysis_result(self, result: AnalysisResult) -> None:
         """Apply analysis results to the registry."""
         # Update or create the affected service
         service = self.get_or_create_service(result.affected_service)
