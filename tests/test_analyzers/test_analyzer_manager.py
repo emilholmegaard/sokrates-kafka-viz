@@ -48,6 +48,8 @@ class TestAnalyzerManager:
 
         assert len(services) == 1
         service = services.get_service("service")
+        print(service)
+        print(services.get_all_services())
         assert isinstance(service, Service)
         assert service.name == "service"
         assert service.language == "java"
@@ -85,6 +87,8 @@ class TestAnalyzerManager:
 
         assert len(services) == 1
         service = services.get_service("python-service")
+        print(services.get_all_services())
+        print(service)
         assert isinstance(service, Service)
         assert service.name == "python-service"
         assert service.language == "python"
@@ -123,9 +127,9 @@ class TestAnalyzerManager:
         """
         )
 
-        analysis_result = analyzer_manager.analyze_file(test_file, mock_service)
-        assert analysis_result is not None
-        assert "test-topic" in analysis_result.topics
+        topics = analyzer_manager.analyze_file(test_file, mock_service)
+        assert topics is not None
+        assert "test-topic" in topics
 
     def test_generate_output(self, analyzer_manager) -> None:
         services = ServiceCollection()
