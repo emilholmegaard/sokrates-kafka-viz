@@ -98,29 +98,24 @@ class ServiceAnalyzer(BaseAnalyzer):
     def _create_service(
         self, path: Path, name: str, language: str, build_file: Path
     ) -> Service:
-        """Create a Service object and collect its source files."""
+        """Create a Service object with proper initialization."""
         service = Service(
             name=name,
             root_path=path,
             language=language,
-            build_file=build_file,
         )
-
-        extensions = {
-            "java": [".java", ".kt", ".scala"],
-            "javascript": [".js", ".ts"],
+        # Add source files
+        for ext in {
+            "java": [".java"],
             "python": [".py"],
+            "javascript": [".js", ".ts"],
             "csharp": [".cs"],
-        }
-
-        for ext in extensions.get(language, []):
+        }.get(language, []):
             for source_file in path.rglob(f"*{ext}"):
-                relative_path = source_file.relative_to(path)
-                is_test_file = any(
-                    str(relative_path).startswith(test_dir)
+                if not any(
+                    str(source_file).startswith(str(path / test_dir))
                     for test_dir in self.test_dirs
-                )
-                if not is_test_file:
+                ):
                     service.source_files.add(source_file)
 
         return service
@@ -183,7 +178,9 @@ class ServiceAnalyzer(BaseAnalyzer):
 
                         # Add as discovered service if not already known
                         if dep_service_name not in result.discovered_services:
-                            dep_service = Service(name=dep_service_name)
+                            dep_service = Service(
+                                name=dep_service_name, root_path=service.root_path
+                            )
                             result.discovered_services[dep_service_name] = dep_service
 
                         # Add relationship
@@ -225,7 +222,9 @@ class ServiceAnalyzer(BaseAnalyzer):
 
                     # Add as discovered service
                     if service_name not in result.discovered_services:
-                        dep_service = Service(name=service_name)
+                        dep_service = Service(
+                            name=service_name, root_path=service.root_path
+                        )
                         result.discovered_services[service_name] = dep_service
 
                     # Add relationship
@@ -256,7 +255,9 @@ class ServiceAnalyzer(BaseAnalyzer):
 
                     # Add as discovered service
                     if service_name not in result.discovered_services:
-                        dep_service = Service(name=service_name)
+                        dep_service = Service(
+                            name=service_name, root_path=service.root_path
+                        )
                         result.discovered_services[service_name] = dep_service
 
                     # Add relationship
