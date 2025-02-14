@@ -78,14 +78,6 @@ class AnalyzerManager:
 
             new_service.source_files = service.source_files.copy()
 
-            new_service.pom_path = (
-                service.pom_path if hasattr(service, "pom_path") else None
-            )
-            new_service.package_json_path = (
-                service.package_json_path
-                if hasattr(service, "package_json_path")
-                else None
-            )
             # Let service discovery add source files to the Service description
             services.add_service(new_service)
 
