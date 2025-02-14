@@ -4,7 +4,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional
 
 
 class ServiceNameExtractor:
@@ -49,7 +49,9 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
                 if re.match(r"\{.*\}", root.tag)
                 else {}
             )
-            ns_path = lambda p: p if not ns else p.replace("/", "/mvn:")
+
+            def ns_path(p):
+                return p if not ns else p.replace("/", "/mvn:")
 
             # First try artifact ID
             artifact_id = root.find(ns_path("artifactId"), ns)
