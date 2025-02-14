@@ -42,7 +42,7 @@ class AnalysisResult:
 class ServiceRegistry:
     """Centralized registry for managing services and their relationships."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._services: Dict[str, Service] = {}
         self._relationships: List[ServiceRelationship] = []
         self.logger = logging.getLogger(__name__)
