@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -224,6 +225,9 @@ class AnalyzerManager:
                 f"Service {service_name}: {len(service_data['topics'])} topics, "
                 f"{len(service_data['schemas'])} schemas"
             )
+
+        result["generated"] = datetime.now().isoformat()
+        self.logger.debug(f"Added timestamp: {result['timestamp']}")
 
         if include_debug:
             result["debug_info"] = self.get_debug_info()

@@ -134,4 +134,5 @@ cython_debug/
 
 # Output file / Debug
 analysis_output.json
+architecture.html
 debug.txt
