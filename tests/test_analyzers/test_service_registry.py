@@ -50,7 +50,9 @@ def test_service_relationship(service_registry: ServiceRegistry) -> None:
 def test_analysis_result_application(service_registry: ServiceRegistry) -> None:
     # Test applying analysis results
     result = AnalysisResult("service-a")
-    result.discovered_services["service-b"] = Service(name="service-b")
+    result.discovered_services["service-b"] = Service(
+        name="service-b", root_path=Path("/test")
+    )
     result.service_relationships.append(
         ServiceRelationship("service-a", "service-b", "spring-dependency")
     )

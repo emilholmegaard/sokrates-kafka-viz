@@ -8,7 +8,7 @@ from kafka_viz.models.service import Service
 
 @pytest.fixture
 def test_service():
-    return Service(name="test-service", language="java")
+    return Service(name="test-service", root_path=test_data_path, language="java")
 
 
 @pytest.fixture

@@ -15,7 +15,7 @@ def analyzer() -> JavaAnalyzer:
 
 @pytest.fixture
 def test_service():
-    return Service("test-service", Path("/tmp/test"))
+    return Service(name="test-service", root_path=Path("/tmp/test"))
 
 
 def test_can_analyze(analyzer) -> None:

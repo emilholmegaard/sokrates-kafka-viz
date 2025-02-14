@@ -10,7 +10,7 @@ def test_advanced_kafka_patterns_integration(test_data_dir) -> None:
 
     # Create a service manually (since we're testing a specific directory)
     service_path = test_data_dir / "java" / "advanced"
-    java_service = Service(name="java-service", path=service_path, language="java")
+    java_service = Service(name="java-service", root_path=service_path, language="java")
 
     # Create a service collection and add our service
     services = ServiceCollection()
@@ -91,7 +91,7 @@ def test_service_analysis_integration(test_data_dir) -> None:
     java_service_path = test_data_dir / "java" / "advanced"
     if java_service_path.exists():
         java_service = Service(
-            name="java-service", path=java_service_path, language="java"
+            name="java-service", root_path=java_service_path, language="java"
         )
         services.add_service(java_service)
 
@@ -99,7 +99,7 @@ def test_service_analysis_integration(test_data_dir) -> None:
     spring_service_path = test_data_dir / "spring_service"
     if spring_service_path.exists():
         spring_service = Service(
-            name="spring-service", path=spring_service_path, language="java"
+            name="spring-service", root_path=spring_service_path, language="java"
         )
         services.add_service(spring_service)
 
@@ -107,7 +107,7 @@ def test_service_analysis_integration(test_data_dir) -> None:
     python_service_path = test_data_dir / "python_service"
     if python_service_path.exists():
         python_service = Service(
-            name="python-service", path=python_service_path, language="python"
+            name="python-service", root_path=python_service_path, language="python"
         )
         services.add_service(python_service)
 

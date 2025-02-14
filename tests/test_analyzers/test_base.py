@@ -27,7 +27,7 @@ def test_base_analyzer_can_analyze(test_data_dir):
 
 def test_base_analyzer_find_topics(python_service_dir):
     analyzer = SimpleTestAnalyzer()
-    service = Service(name="test-service", path=python_service_dir)
+    service = Service(name="test-service", root_path=python_service_dir)
 
     analysis_result = analyzer.analyze(python_service_dir / "kafka_client.py", service)
 

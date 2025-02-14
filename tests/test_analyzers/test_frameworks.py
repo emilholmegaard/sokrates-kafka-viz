@@ -6,7 +6,7 @@ from kafka_viz.models.service import Service
 
 def test_spring_cloud_stream_analyzer(spring_service_dir):
     analyzer = SpringCloudStreamAnalyzer()
-    service = Service(name="spring-service", path=spring_service_dir)
+    service = Service(name="spring-service", root_path=spring_service_dir)
 
     # Test source file analysis
     processor_file = (
@@ -24,7 +24,7 @@ def test_spring_cloud_stream_analyzer(spring_service_dir):
 
 def test_spring_analyzer_ignore_test_files():
     analyzer = SpringCloudStreamAnalyzer()
-    service = Service(name="spring-service", path=Path("."))
+    service = Service(name="spring-service", root_path=Path("."))
 
     test_file = Path("OrderProcessorTest.java")
     analysis_result = analyzer.analyze(test_file, service)

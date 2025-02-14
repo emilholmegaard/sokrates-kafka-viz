@@ -14,7 +14,7 @@ class TestAnalyzerManager:
 
     @pytest.fixture
     def mock_service(self):
-        return Service(Path("/mock/path"), "java")
+        return Service(name="mock", root_path=Path("/mock/path"), language="java")
 
     def test_discover_services_java(self, analyzer_manager, tmp_path) -> None:
         # Create mock Java service structure

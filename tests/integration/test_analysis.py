@@ -20,7 +20,7 @@ def run_cli_analysis(services_dir: Path) -> Dict:
 def create_java_service(code: str) -> Service:
     """Create a test Java service with given code."""
     # TODO: Implement Java service creator
-    return Service(name="test-java-service", path=Path("."))
+    return Service(name="test-java-service", root_path=Path("."))
 
 
 def test_end_to_end_analysis(tmp_path):
