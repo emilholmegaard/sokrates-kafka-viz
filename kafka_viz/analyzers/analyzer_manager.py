@@ -63,7 +63,10 @@ class AnalyzerManager:
             self.logger.debug(
                 f"Adding service: {service.name} at path {service.root_path}"
             )
-            root_path = Path(service.root_path)
+            if isinstance(service.root_path, str):
+                root_path = Path(service.root_path)
+            else:
+                root_path = service.root_path
             service.root_path = root_path
             # Create a new service entry with proper metadata
             new_service = Service(
@@ -79,6 +82,7 @@ class AnalyzerManager:
                 if hasattr(service, "package_json_path")
                 else None
             )
+            # Let service discovery add source files to the Service description
             services.add_service(new_service)
             service_dict.discovered_services[service.name] = new_service
 
@@ -90,17 +94,18 @@ class AnalyzerManager:
     def analyze_schemas(self, service: Service) -> None:
         """Second pass: Analyze schemas for a service."""
 
-        self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
-
-        schemas = self.schema_analyzer.analyze_directory(service.root_path)
-        self.logger.debug(f"Schemas object: {schemas}")
-        if schemas:
-            self.logger.debug(
-                f"Found {len(schemas)} schemas for service at {service.root_path}"
+        try:
+            self.logger.debug(f"Analyzing schemas for service at {service.root_path}")
+            schemas = self.schema_analyzer.analyze_directory(service.root_path)
+            if schemas:
+                self.logger.debug(
+                    f"Found {len(schemas)} schemas for service at {service.root_path}"
+                )
+                service.schemas.update(schemas)
+        except Exception as e:
+            self.logger.error(
+                f"Error analyzing schemas for service {service.name}: {e}"
             )
-            for schema_name in schemas:
-                self.logger.debug(f"Found schema: {schema_name}")
-        service.schemas.update(schemas)
 
     def analyze_file(
         self, file_path: Path, service: Service

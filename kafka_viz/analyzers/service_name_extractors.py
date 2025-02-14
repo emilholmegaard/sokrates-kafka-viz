@@ -19,33 +19,22 @@ class ServiceNameExtractor:
         if not name:
             return ""
         # Convert camelCase to kebab-case
-        name = re.sub('([a-z0-9])([A-Z])', r'\1-\2', name).lower()
+        name = re.sub("([a-z0-9])([A-Z])", r"\1-\2", name).lower()
         # Replace spaces and underscores with hyphens
-        name = re.sub(r'[\s_]+', '-', name)
+        name = re.sub(r"[\s_]+", "-", name)
         # Remove any invalid characters
-        name = re.sub(r'[^a-z0-9-]', '', name)
+        name = re.sub(r"[^a-z0-9-]", "", name)
         return name
 
 
 class JavaServiceNameExtractor(ServiceNameExtractor):
     """Extract service name from Maven/Gradle build files."""
 
-    def __init__(self):
-        self.parent_artifact_ids: Set[str] = {
-            'spring-boot-starter-parent',
-            'spring-cloud-starter-parent',
-            'service-parent',
-            'parent',
-            'eva-service-parent',
-            'sceh-parent',
-            'seds-parent'
-        }
-
     def extract(self, build_file: Path) -> Optional[str]:
         """Extract service name from pom.xml or build.gradle."""
-        if build_file.name == 'pom.xml':
+        if build_file.name == "pom.xml":
             return self._extract_from_pom(build_file)
-        elif build_file.name in ['build.gradle', 'build.gradle.kts']:
+        elif build_file.name in ["build.gradle", "build.gradle.kts"]:
             return self._extract_from_gradle(build_file)
         return None
 
@@ -55,25 +44,27 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
             tree = ET.parse(pom_file)
             root = tree.getroot()
             # Remove namespace for easier parsing
-            ns = {'mvn': re.match(r'\{.*\}', root.tag).group(0)} if re.match(r'\{.*\}', root.tag) else {}
-            ns_path = lambda p: p if not ns else p.replace('/', '/mvn:')
+            ns = (
+                {"mvn": re.match(r"\{.*\}", root.tag).group(0)}
+                if re.match(r"\{.*\}", root.tag)
+                else {}
+            )
+            ns_path = lambda p: p if not ns else p.replace("/", "/mvn:")
 
             # First try artifact ID
-            artifact_id = root.find(ns_path('artifactId'), ns)
+            artifact_id = root.find(ns_path("artifactId"), ns)
             if artifact_id is not None and artifact_id.text:
-                # Check if it's not a parent artifact
-                if artifact_id.text not in self.parent_artifact_ids:
-                    return self._sanitize_name(artifact_id.text)
+                return self._sanitize_name(artifact_id.text)
 
             # Then try name tag
-            name = root.find(ns_path('name'), ns)
+            name = root.find(ns_path("name"), ns)
             if name is not None and name.text:
                 if name.text not in self.parent_artifact_ids:
                     return self._sanitize_name(name.text)
 
             # Finally try the final directory name
             dir_name = pom_file.parent.name
-            if dir_name and dir_name not in self.parent_artifact_ids:
+            if dir_name:
                 return self._sanitize_name(dir_name)
 
         except Exception:
@@ -85,14 +76,14 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
         """Extract service name from build.gradle."""
         try:
             content = gradle_file.read_text()
-            
+
             # Try to find project name/artifactId
             match = re.search(r'rootProject\.name\s*=\s*[\'"]([^\'"]+)[\'"]', content)
             if match:
                 name = match.group(1)
                 if name not in self.parent_artifact_ids:
                     return self._sanitize_name(name)
-                
+
             match = re.search(r'archivesBaseName\s*=\s*[\'"]([^\'"]+)[\'"]', content)
             if match:
                 name = match.group(1)
@@ -100,10 +91,12 @@ class JavaServiceNameExtractor(ServiceNameExtractor):
                     return self._sanitize_name(name)
 
             # Try project name from settings.gradle if it exists
-            settings_gradle = gradle_file.parent / 'settings.gradle'
+            settings_gradle = gradle_file.parent / "settings.gradle"
             if settings_gradle.exists():
                 settings_content = settings_gradle.read_text()
-                match = re.search(r'rootProject\.name\s*=\s*[\'"]([^\'"]+)[\'"]', settings_content)
+                match = re.search(
+                    r'rootProject\.name\s*=\s*[\'"]([^\'"]+)[\'"]', settings_content
+                )
                 if match:
                     name = match.group(1)
                     if name not in self.parent_artifact_ids:
@@ -123,10 +116,10 @@ class JavaScriptServiceNameExtractor(ServiceNameExtractor):
         try:
             with open(build_file) as f:
                 package_json = json.load(f)
-                name = package_json.get('name')
+                name = package_json.get("name")
                 if name:
                     # Remove scope from scoped packages
-                    name = name.split('/')[-1]
+                    name = name.split("/")[-1]
                     return self._sanitize_name(name)
         except Exception:
             pass
@@ -144,11 +137,11 @@ class PythonServiceNameExtractor(ServiceNameExtractor):
 
     def extract(self, build_file: Path) -> Optional[str]:
         """Extract service name from setup.py, pyproject.toml, or requirements.txt."""
-        if build_file.name == 'setup.py':
+        if build_file.name == "setup.py":
             return self._extract_from_setup_py(build_file)
-        elif build_file.name == 'pyproject.toml':
+        elif build_file.name == "pyproject.toml":
             return self._extract_from_pyproject_toml(build_file)
-        
+
         # For requirements.txt, try directory name
         dir_name = build_file.parent.name
         if dir_name:
@@ -160,7 +153,9 @@ class PythonServiceNameExtractor(ServiceNameExtractor):
         try:
             content = setup_file.read_text()
             # Look for name parameter in setup()
-            match = re.search(r'setup\s*\([^)]*name\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.DOTALL)
+            match = re.search(
+                r'setup\s*\([^)]*name\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.DOTALL
+            )
             if match:
                 return self._sanitize_name(match.group(1))
         except Exception:
@@ -172,7 +167,9 @@ class PythonServiceNameExtractor(ServiceNameExtractor):
         try:
             content = pyproject_file.read_text()
             # Look for project name in [project] section
-            match = re.search(r'\[project\][^\[]*name\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.DOTALL)
+            match = re.search(
+                r'\[project\][^\[]*name\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.DOTALL
+            )
             if match:
                 return self._sanitize_name(match.group(1))
         except Exception:
@@ -188,22 +185,22 @@ class CSharpServiceNameExtractor(ServiceNameExtractor):
         try:
             tree = ET.parse(build_file)
             root = tree.getroot()
-            
+
             # Try AssemblyName first
             assembly_name = root.find(".//AssemblyName")
             if assembly_name is not None and assembly_name.text:
                 return self._sanitize_name(assembly_name.text)
-            
+
             # Try RootNamespace
             root_namespace = root.find(".//RootNamespace")
             if root_namespace is not None and root_namespace.text:
                 return self._sanitize_name(root_namespace.text)
-                
+
             # Try PackageId
             package_id = root.find(".//PackageId")
             if package_id is not None and package_id.text:
                 return self._sanitize_name(package_id.text)
-                
+
         except Exception:
             pass
 
