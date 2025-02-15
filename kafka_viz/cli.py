@@ -7,7 +7,9 @@ from rich.console import Console
 from rich.progress import Progress
 
 from .analyzers.analyzer_manager import AnalyzerManager
-from .visualization.mermaid import MermaidGenerator
+
+# from .visualization.mermaid import MermaidGenerator
+from .visualization.simple_viz import SimpleViz
 
 app = typer.Typer()
 console = Console()
@@ -196,7 +198,8 @@ def visualize(
             data = json.load(f)
 
         # Generate visualization
-        generator = MermaidGenerator()
+        # generator = MermaidGenerator()
+        generator = SimpleViz()
         html_content = generator.generate_html(data)
 
         with open(output, "w") as f:
