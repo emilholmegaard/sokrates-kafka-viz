@@ -4,95 +4,147 @@ from .base import BaseGenerator
 
 class SimpleViz(BaseGenerator):
 
-    def generate_html(self, data: dict) -> str:
-        mermaid_diagram = self.generate_mermaid(data)
-        return f"""
-        <html>
-        <body>
-            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-            <script>mermaid.initialize({{startOnLoad:true}});</script>
-            <div class="mermaid">
-            {mermaid_diagram}
-            </div>
-        </body>
-        </html>
-        """
-
     def generate_mermaid(self, analysis_result) -> str:
         """Generate Mermaid diagram with Kafka dependencies."""
-        mermaid_code = ["graph LR"]
+        mermaid_lines = ["graph TD"]  # Using TD (top-down) for better layout
 
-        # Track nodes to avoid duplicates
+        # Track nodes
         added_nodes = set()
+        topic_nodes = set()
+        service_nodes = set()
+        schema_nodes = set()
+
+        # Add subgraphs for organization
+        mermaid_lines.append("    subgraph Services")
 
         # Add services
-        for service_name, service_info in analysis_result["services"].items():
-            if service_name not in added_nodes:
-                node_id = service_name.replace("-", "_")
-                mermaid_code.append(f'    {node_id}["{service_name}"]')
-                added_nodes.add(service_name)
+        for service_name in analysis_result["services"].keys():
+            node_id = self.clean_id(service_name)
+            mermaid_lines.append(f'        {node_id}["{service_name}"]')
+            service_nodes.add(node_id)
+            added_nodes.add(node_id)
+        mermaid_lines.append("    end")
 
-        # Add topics
+        mermaid_lines.append("    subgraph Topics")
+        # Add topics and their relationships
         for service_name, service_info in analysis_result["services"].items():
+            service_id = self.clean_id(service_name)
+
             for topic, topic_info in service_info.get("topics", {}).items():
-                if topic not in added_nodes:
-                    topic_id = f'topic_{topic.replace("-", "_").replace(".", "_")}'
-                    mermaid_code.append(f'    {topic_id}["{topic}"]')
-                    added_nodes.add(topic)
+                # Clean topic name and create shorter display version
+                topic_id = "topic_" + self.clean_id(topic)
+                if topic_id not in added_nodes:
+                    display_name = self.shorten_topic_name(topic)
+                    mermaid_lines.append(f'        {topic_id}["{display_name}"]')
+                    topic_nodes.add(topic_id)
+                    added_nodes.add(topic_id)
 
-                # Add producer relationships
-                if topic_info.get("producers"):
-                    for producer in topic_info["producers"]:
-                        producer_id = producer.replace("-", "_")
-                        mermaid_code.append(
-                            f"    {producer_id} -->|produces| {topic_id}"
-                        )
+                # Add relationships
+                if service_name in topic_info.get("producers", []):
+                    mermaid_lines.append(f"    {service_id} --> {topic_id}")
+                if service_name in topic_info.get("consumers", []):
+                    mermaid_lines.append(f"    {topic_id} --> {service_id}")
+        mermaid_lines.append("    end")
 
-                # Add consumer relationships
-                if topic_info.get("consumers"):
-                    for consumer in topic_info["consumers"]:
-                        consumer_id = consumer.replace("-", "_")
-                        mermaid_code.append(
-                            f"    {topic_id} -->|consumed by| {consumer_id}"
-                        )
+        # Add schemas if present
+        if any(
+            service.get("schemas") for service in analysis_result["services"].values()
+        ):
+            mermaid_lines.append("    subgraph Schemas")
+            for service_name, service_info in analysis_result["services"].items():
+                service_id = self.clean_id(service_name)
 
-        # Add schema relationships if present
-        for service_name, service_info in analysis_result["services"].items():
-            for schema_name, schema_info in service_info.get("schemas", {}).items():
-                if schema_name not in added_nodes:
-                    schema_id = f'schema_{schema_name.replace("-", "_")}'
-                    mermaid_code.append(f'    {schema_id}["Schema: {schema_name}"]')
-                    added_nodes.add(schema_name)
+                for schema_name in service_info.get("schemas", {}).keys():
+                    schema_id = "schema_" + self.clean_id(schema_name)
+                    if schema_id not in added_nodes:
+                        mermaid_lines.append(f'        {schema_id}["{schema_name}"]')
+                        schema_nodes.add(schema_id)
+                        added_nodes.add(schema_id)
+                    mermaid_lines.append(f"    {service_id} -.-> {schema_id}")
+            mermaid_lines.append("    end")
 
         # Add styling
-        mermaid_code.extend(
+        mermaid_lines.extend(
             [
-                "    %% Style definitions",
+                "    %% Styling",
                 "    classDef service fill:#f9f,stroke:#333,stroke-width:2px",
                 "    classDef topic fill:#bbf,stroke:#333,stroke-width:2px",
                 "    classDef schema fill:#bfb,stroke:#333,stroke-width:2px",
-                "",
-                "    %% Apply styles",
-                "    class "
-                + ",".join(
-                    s.replace("-", "_") for s in analysis_result["services"].keys()
-                )
-                + " service",
-                "    class "
-                + ",".join(
-                    f'topic_{t.replace("-", "_").replace(".", "_")}'
-                    for s in analysis_result["services"].values()
-                    for t in s.get("topics", {})
-                )
-                + " topic",
-                "    class "
-                + ",".join(
-                    f'schema_{s.replace("-", "_")}'
-                    for svc in analysis_result["services"].values()
-                    for s in svc.get("schemas", {})
-                )
-                + " schema",
             ]
         )
 
-        return "\n".join(mermaid_code)
+        # Apply styles to nodes
+        if service_nodes:
+            mermaid_lines.append(f"    class {' '.join(service_nodes)} service")
+        if topic_nodes:
+            mermaid_lines.append(f"    class {' '.join(topic_nodes)} topic")
+        if schema_nodes:
+            mermaid_lines.append(f"    class {' '.join(schema_nodes)} schema")
+
+        return "\n".join(mermaid_lines)
+
+    def clean_id(self, name: str):
+        """Clean string to make it a valid Mermaid ID."""
+        return (
+            name.replace("-", "_")
+            .replace(".", "_")
+            .replace("${", "")
+            .replace("}", "")
+            .replace("#", "hash")
+            .replace("@", "at")
+            .replace(" ", "_")
+            .replace(":", "_")
+            .replace("/", "_")
+        )
+
+    def shorten_topic_name(self, topic: str) -> str:
+        """Create a shorter, readable version of topic name."""
+        # Remove common prefixes and variable notation
+        cleaned = (
+            topic.replace("${kafka.streams.", "")
+            .replace("${config.kafka.", "")
+            .replace("${env.deployment}", "env")
+            .replace("}", "")
+        )
+        return cleaned
+
+    def generate_html(self, data: dict) -> str:
+
+        mermaid_code = self.generate_mermaid(data)
+
+        html_template = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Kafka Service Architecture</title>
+                    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+                <style>
+                    .mermaid {{
+                        width: 100%;
+                        overflow: auto;
+                    }}
+                </style>
+                <script>
+                    mermaid.initialize({{
+                        startOnLoad: true,
+                        theme: 'default',
+                        flowchart: {{
+                            useMaxWidth: true,
+                            htmlLabels: true,
+                            curve: 'basis',
+                            rankSpacing: 100,
+                            nodeSpacing: 100
+                        }},
+                        securityLevel: 'loose'
+                    }});
+                </script>
+                </head>
+            <body>
+                <div class="mermaid">
+                {mermaid_code}
+                </div>
+            </body>
+            </html>
+        """
+        return html_template
