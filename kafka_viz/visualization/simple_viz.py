@@ -2,21 +2,46 @@ from .base import BaseGenerator
 
 
 def clean_mermaid_id(name: str) -> str:
-    """Clean a string to be a valid Mermaid ID without any specific knowledge of the content."""
-    invalid_chars = "-.${}#@: /\\{}"
+    """Clean a string to be a valid Mermaid ID."""
+    # Use a more comprehensive list of invalid characters
+    invalid_chars = {
+        "-": "_",
+        ".": "_",
+        "${": "",
+        "}": "",
+        "#": "hash",
+        "@": "at",
+        " ": "_",
+        ":": "_",
+        "/": "_",
+        "\\": "_",
+        "{": "",
+        "env.deployment": "env",
+    }
     result = name
-    for char in invalid_chars:
-        result = result.replace(char, "_")
+    for old, new in invalid_chars.items():
+        result = result.replace(old, new)
     return result
 
 
 def shorten_topic_name(topic: str) -> str:
-    """Create a shorter display name for topics using generic rules."""
-    # Split by common separators and take last meaningful part
-    parts = topic.split(".")
-    if len(parts) > 2:
-        # Take first and last parts to maintain context
-        return f"{parts[0]}...{parts[-1]}"
+    """Create a shorter display name for topics."""
+    # Handle special prefixes
+    if topic.startswith("${"):
+        # Extract the main part between ${ and }
+        main_part = topic[2:].split("}")[0] if "}" in topic else topic[2:]
+        # Take only the meaningful part of the topic name
+        parts = main_part.split(".")
+        if len(parts) > 2:
+            return f"{parts[0]}...{parts[-1]}"
+        return main_part
+
+    # Handle app prefixes
+    if topic.startswith("app"):
+        parts = topic.split(".")
+        if len(parts) > 2:
+            return f"{parts[0]}...{parts[-1]}"
+
     return topic
 
 
@@ -59,6 +84,7 @@ class SimpleViz(BaseGenerator):
     def _add_topics(self, analysis_result: dict, mermaid_lines: list) -> set:
         """Add topics and their relationships to the diagram."""
         topic_nodes = set()
+        topic_edges = []
         mermaid_lines.append("    subgraph Topics")
 
         # First pass: collect and add all topics
@@ -85,7 +111,7 @@ class SimpleViz(BaseGenerator):
                     self.edges.add(f"    {topic_id} --> {service_id}")
 
         # Add all edges after node definitions
-        mermaid_lines.extend(sorted(self.edges))
+        mermaid_lines.extend(sorted(set(topic_edges)))
         mermaid_lines.append("    end")
         return topic_nodes
 
