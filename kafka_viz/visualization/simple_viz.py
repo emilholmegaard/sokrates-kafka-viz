@@ -3,6 +3,10 @@ from .base import BaseGenerator
 
 def clean_node_id(topic: str) -> str:
     """Create safe node ID by replacing invalid characters."""
+    # Special case for hash topic
+    if topic == "#{":
+        return "topic_hash"
+
     replacements = {
         "${": "",
         "}": "",
@@ -14,6 +18,8 @@ def clean_node_id(topic: str) -> str:
         ":": "_",
         "/": "_",
         "\\": "_",
+        "{": "",  # Add explicit handling for curly braces
+        "}": "",
     }
     result = topic
     for old, new in replacements.items():
@@ -24,7 +30,7 @@ def clean_node_id(topic: str) -> str:
 def format_topic_name(topic: str) -> str:
     """Format topic name for display."""
     if topic == "#{":
-        return "#{}"
+        return "hash_topic"
     if topic == "M" or topic == "topic":
         return topic
 
@@ -59,165 +65,126 @@ class SimpleViz(BaseGenerator):
 
     def generate_diagram(self, analysis_result: dict) -> str:
         """Generate Mermaid diagram with Kafka dependencies."""
-        lines = ["graph TB"]
+        # Change from TB (top to bottom) to LR (left to right) for better space usage
+        lines = ["graph LR"]
 
-        # Add Services section
-        service_nodes = self._add_services(analysis_result, lines)
+        # Add Services section with explicit positioning
+        lines.append("subgraph Services[Services]")
+        services = []
+        for i, service_name in enumerate(sorted(analysis_result["services"].keys())):
+            node_id = clean_node_id(service_name)
+            services.append(node_id)
+            # Add positioning hint
+            lines.append(f'    {node_id}["{service_name}"]:::service')
+        lines.append("end")
 
         # Add Topics section
-        topic_nodes = self._add_topics(analysis_result, lines)
-
-        # Add Schemas section
-        schema_nodes = self._add_schemas(analysis_result, lines)
-
-        # Add styling
-        lines.extend(
-            [
-                "    %% Styling",
-                "    classDef service fill:#f9f,stroke:#333,stroke-width:2px",
-                "    classDef topic fill:#bbf,stroke:#333,stroke-width:2px",
-                "    classDef schema fill:#bfb,stroke:#333,stroke-width:2px",
-            ]
-        )
-
-        # Apply classes
-        if service_nodes:
-            lines.append(f"    class {' '.join(sorted(service_nodes))} service")
-        if topic_nodes:
-            lines.append(f"    class {' '.join(sorted(topic_nodes))} topic")
-        if schema_nodes:
-            lines.append(f"    class {' '.join(sorted(schema_nodes))} schema")
-
-        return "\n".join(lines)
-
-    def _add_services(self, analysis_result: dict, lines: list) -> set:
-        """Add services section."""
-        service_nodes = set()
-        lines.append("    subgraph Services")
-
-        for service_name in sorted(analysis_result["services"].keys()):
-            node_id = clean_node_id(service_name)
-            service_nodes.add(node_id)
-            lines.append(f'        {node_id}["{service_name}"]')
-
-        lines.append("    end")
-        return service_nodes
-
-    def _add_topics(self, analysis_result: dict, lines: list) -> set:
-        """Add topics section with relationships."""
-        topic_nodes = set()
+        lines.append("subgraph Topics[Topics]")
+        topics = []
         topic_edges = []
-
-        # First collect all topics
-        topics = {}  # {topic_id: display_name}
-        for service_info in analysis_result["services"].values():
-            for topic in service_info.get("topics", {}):
-                topic_id = f"topic_{clean_node_id(topic)}"
-                if topic_id not in topics:
-                    topics[topic_id] = format_topic_name(topic)
-                    topic_nodes.add(topic_id)
-
-        # Start Topics section
-        lines.append("    subgraph Topics")
-
-        # Add topic nodes
-        for topic_id in sorted(topics.keys()):
-            lines.append(f'        {topic_id}["{topics[topic_id]}"]')
-
-        lines.append("")  # Add spacing
-
-        # Add relationships
         for service_name, service_info in analysis_result["services"].items():
             service_id = clean_node_id(service_name)
             for topic, topic_info in service_info.get("topics", {}).items():
                 topic_id = f"topic_{clean_node_id(topic)}"
+                if topic_id not in topics:
+                    topics.append(topic_id)
+                    lines.append(f'    {topic_id}["{format_topic_name(topic)}"]')
 
+                # Collect edges but don't add them yet
                 if service_name in topic_info.get("producers", []):
-                    topic_edges.append(f"    {service_id} --> {topic_id}")
+                    topic_edges.append(f"{service_id} --> {topic_id}")
                 if service_name in topic_info.get("consumers", []):
-                    topic_edges.append(f"    {topic_id} --> {service_id}")
+                    topic_edges.append(f"{topic_id} --> {service_id}")
+        lines.append("end")
 
-        # Add edges in sorted order
-        lines.extend(sorted(set(topic_edges)))
-        lines.append("    end")
-        return topic_nodes
-
-    def _add_schemas(self, analysis_result: dict, lines: list) -> set:
-        """Add schemas section."""
-        schema_nodes = set()
+        # Add Schemas section
+        lines.append("subgraph Schemas[Schemas]")
+        schemas = []
         schema_edges = []
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = clean_node_id(service_name)
+            for schema_name in service_info.get("schemas", {}):
+                schema_id = f"schema_{clean_node_id(schema_name)}"
+                if schema_id not in schemas:
+                    schemas.append(schema_id)
+                    lines.append(f'    {schema_id}["{schema_name}"]')
+                # Collect schema edges
+                schema_edges.append(f"{service_id} -.-> {schema_id}")
+        lines.append("end")
 
-        has_schemas = any(
-            service.get("schemas") for service in analysis_result["services"].values()
+        # Add all relationships
+        lines.extend(sorted(set(topic_edges)))
+        lines.extend(sorted(set(schema_edges)))
+
+        # Enhanced styling
+        lines.extend(
+            [
+                "%% Styling",
+                "classDef service fill:#f9f,stroke:#333,stroke-width:2px;",
+                "classDef topic fill:#bbf,stroke:#333,stroke-width:2px;",
+                "classDef schema fill:#bfb,stroke:#333,stroke-width:2px;",
+                "classDef default fill:#fff,stroke:#333,stroke-width:1px;",
+                "%% Layout configuration",
+                "%%{init: {",
+                "'flowchart': {",
+                "'curve': 'monotoneX',",
+                "'nodeSpacing': 100,",
+                "'rankSpacing': 100,",
+                "'ranker': 'tight-tree'",
+                "},",
+                "'theme': 'default'",
+                "} }%%",
+                "%% Apply styles",
+                "class Services service;",
+                "class Topics topic;",
+                "class Schemas schema;",
+            ]
         )
 
-        if has_schemas:
-            lines.append("    subgraph Schemas")
-
-            # Collect unique schemas
-            schemas = set()
-            for service_info in analysis_result["services"].values():
-                schemas.update(service_info.get("schemas", {}).keys())
-
-            # Add schema nodes
-            for schema_name in sorted(schemas):
-                schema_id = f"schema_{clean_node_id(schema_name)}"
-                schema_nodes.add(schema_id)
-                lines.append(f'        {schema_id}["{schema_name}"]')
-
-            lines.append("")  # Add spacing
-
-            # Add schema relationships
-            for service_name, service_info in analysis_result["services"].items():
-                service_id = clean_node_id(service_name)
-                for schema_name in service_info.get("schemas", {}):
-                    schema_id = f"schema_{clean_node_id(schema_name)}"
-                    schema_edges.append(f"    {service_id} -.-> {schema_id}")
-
-            # Add edges in sorted order
-            lines.extend(sorted(schema_edges))
-            lines.append("    end")
-
-        return schema_nodes
+        return "\n".join(lines)
 
     def generate_html(self, data: dict) -> str:
-
+        """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
 
-        html_template = f"""
-        <!DOCTYPE html>
-        <html>
-            <head>
-            <meta charset="UTF-8">
-            <title>Kafka Service Architecture</title>
-            <script src='https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js'></script>
-            <style>
-                .mermaid {{
+        html_template = """<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Kafka Service Architecture</title>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+        <style>
+            .mermaid {{
                 width: 100%;
-                height: 100%;
+                height: 100vh;
                 overflow: auto;
-                }}
-            </style>
-            <script>
-                mermaid.initialize({{
+                padding: 20px;
+            }}
+        </style>
+    </head>
+    <body>
+        <pre class="mermaid">
+{diagram_content}
+        </pre>
+        <script>
+            mermaid.initialize({{
                 startOnLoad: true,
-                theme: 'default',
+                theme: "default",
                 flowchart: {{
                     useMaxWidth: true,
                     htmlLabels: true,
-                    curve: 'basis'
+                    curve: "monotoneX",
+                    nodeSpacing: 100,
+                    rankSpacing: 100,
+                    ranker: "tight-tree"
                 }},
-                securityLevel: 'loose',
+                securityLevel: "loose",
                 maxTextSize: 90000
-                }});
-            </script>
-            </head>
-            <body>
-            <div class="mermaid">
-                {mermaid_code}
-            </div>
-            </body>
-        </html>
-        """
+            }});
+        </script>
+    </body>
+</html>"""
 
-        return html_template
+        # Double up curly braces in the template for literal curly braces
+        result = html_template.format(diagram_content=mermaid_code)
+        return result
