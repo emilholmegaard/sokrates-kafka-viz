@@ -1,6 +1,74 @@
 from .base import BaseGenerator
 
 
+def extract_topic_display_name(topic: str) -> str:
+    """Extract a clean display name from a topic string."""
+    if topic == "#{":
+        return "#{}"
+    elif topic == "M":
+        return "M"
+    elif topic == "topic":
+        return "topic"
+
+    # Handle ${kafka.streams...} topics
+    if "kafka.streams" in topic:
+        parts = topic.replace("${", "").replace("}", "").split(".")
+        if len(parts) >= 3:
+            # Take meaningful part and remove common prefixes
+            meaningful_part = parts[-1].replace("target-topic", "target")
+            return f"kafka.streams...{meaningful_part}"
+        return parts[-1]
+
+    # Handle ${config.kafka...} topics
+    if "config.kafka" in topic:
+        parts = topic.replace("${", "").replace("}", "").split(".")
+        if len(parts) >= 3:
+            return f"config.kafka...{parts[-1]}"
+        return parts[-1]
+
+    # Handle app prefix topics
+    if topic.startswith("app"):
+        parts = topic.split(".")
+        if "event" in parts:
+            event_index = parts.index("event")
+            if len(parts) > event_index + 1:
+                return f"app...{parts[event_index+1]}"
+        return f"app...{parts[-1]}"
+
+    return topic
+
+
+def clean_node_id(text: str) -> str:
+    """Create a clean node ID for Mermaid."""
+    # First replace ${...} patterns
+    while "${" in text and "}" in text:
+        start = text.find("${")
+        end = text.find("}", start)
+        if start != -1 and end != -1:
+            var_name = text[start : end + 1]
+            clean_name = var_name.replace("${", "").replace("}", "")
+            text = text.replace(var_name, clean_name)
+
+    # Then handle other special characters
+    replacements = {
+        "-": "_",
+        ".": "_",
+        "#": "hash",
+        "@": "at",
+        " ": "_",
+        ":": "_",
+        "/": "_",
+        "\\": "_",
+        "{": "",
+        "}": "",
+    }
+
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    return text
+
+
 def clean_mermaid_id(name: str) -> str:
     """Clean a string to be a valid Mermaid ID."""
     # Use a more comprehensive list of invalid characters
@@ -89,7 +157,74 @@ class SimpleViz(BaseGenerator):
         mermaid_lines.append("    end")
         return service_nodes
 
+    def _add_topics(self, analysis_result: dict, mermaid_lines: list) -> set:
+        """Add topics and their relationships to the diagram."""
+        mermaid_lines.append("    subgraph Topics")
+
+        # Collect all topics and their display names
+        topics = {}  # {topic_id: display_name}
+        edges = []  # [(from_id, to_id)]
+
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = clean_node_id(service_name)
+
+            for topic, topic_info in service_info.get("topics", {}).items():
+                topic_id = f"topic_{clean_node_id(topic)}"
+                if topic_id not in topics:
+                    display_name = extract_topic_display_name(topic)
+                    topics[topic_id] = display_name
+
+                # Record edges
+                if service_name in topic_info.get("producers", []):
+                    edges.append((service_id, topic_id))
+                if service_name in topic_info.get("consumers", []):
+                    edges.append((topic_id, service_id))
+
+        # Add topic nodes in sorted order
+        for topic_id in sorted(topics.keys()):
+            display_name = topics[topic_id]
+            mermaid_lines.append(f'        {topic_id}["{display_name}"]')
+
+        # Add edges after all nodes
+        mermaid_lines.append("")  # Add spacing for readability
+        for from_id, to_id in sorted(edges):
+            mermaid_lines.append(f"    {from_id} --> {to_id}")
+
+        mermaid_lines.append("    end")
+        return set(topics.keys())
+
     def _add_schemas(self, analysis_result: dict, mermaid_lines: list) -> set:
+        """Add schemas and their relationships to the diagram."""
+        schemas = {}  # {schema_id: schema_name}
+        edges = []  # [(service_id, schema_id)]
+
+        # Collect schemas and edges
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = clean_node_id(service_name)
+            for schema_name in service_info.get("schemas", {}):
+                schema_id = f"schema_{clean_node_id(schema_name)}"
+                schemas[schema_id] = schema_name
+                edges.append((service_id, schema_id))
+
+        if schemas:
+            mermaid_lines.append("    subgraph Schemas")
+
+            # Add schema nodes
+            for schema_id in sorted(schemas.keys()):
+                schema_name = schemas[schema_id]
+                mermaid_lines.append(f'        {schema_id}["{schema_name}"]')
+
+            mermaid_lines.append("")  # Add spacing for readability
+
+            # Add schema edges
+            for service_id, schema_id in sorted(edges):
+                mermaid_lines.append(f"    {service_id} -.-> {schema_id}")
+
+            mermaid_lines.append("    end")
+
+        return set(schemas.keys())
+
+    def _add_schemas_old(self, analysis_result: dict, mermaid_lines: list) -> set:
         """Add schemas and their relationships to the diagram."""
         has_schemas = any(
             service.get("schemas") for service in analysis_result["services"].values()
@@ -119,7 +254,7 @@ class SimpleViz(BaseGenerator):
 
         return self.schema_nodes
 
-    def _add_topics(self, analysis_result: dict, mermaid_lines: list) -> set:
+    def _add_topics_old(self, analysis_result: dict, mermaid_lines: list) -> set:
         """Add topics and their relationships to the diagram."""
         topic_nodes = set()
         mermaid_lines.append("    subgraph Topics")
