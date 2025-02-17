@@ -26,29 +26,37 @@ def clean_mermaid_id(name: str) -> str:
 
 def shorten_topic_name(topic: str) -> str:
     """Create a shorter display name for topics."""
-    # Handle special prefixes
+    # Handle special characters and prefixes
     if topic.startswith("${"):
-        # Extract the main part between ${ and }
-        main_part = topic[2:].split("}")[0] if "}" in topic else topic[2:]
-        # Take only the meaningful part of the topic name
-        parts = main_part.split(".")
-        if len(parts) > 2:
-            return f"{parts[0]}...{parts[-1]}"
-        return main_part
+        main_part = topic.split("}")[-1] if "}" in topic else topic
+        main_part = main_part.strip("${}")
+    else:
+        main_part = topic
 
-    # Handle app prefixes
-    if topic.startswith("app"):
-        parts = topic.split(".")
-        if len(parts) > 2:
+    # Split by dots
+    parts = main_part.split(".")
+
+    if len(parts) >= 3:
+        # For long topics, keep key parts
+        if parts[0] == "kafka":
+            # For kafka streams topics, take the meaningful part
+            return f"kafka...{parts[-1]}"
+        elif parts[0].startswith("app"):
+            # For app related topics
+            return f"{parts[0]}...{parts[-1]}"
+        else:
+            # For other long topics
             return f"{parts[0]}...{parts[-1]}"
 
-    return topic
+    return main_part
 
 
 class SimpleViz(BaseGenerator):
     def __init__(self):
-        self.nodes = {}  # Track node IDs and display names
-        self.edges = set()  # Track unique edges
+        self.nodes = {}  # {node_id: display_name}
+        self.edges = []  # List to maintain edge order
+        self.schema_nodes = set()  # Track unique schema nodes
+        self.schema_edges = []  # Track schema edges
 
     def generate_diagram(self, analysis_result: dict) -> str:
         """Generate Mermaid diagram with Kafka dependencies."""
@@ -81,62 +89,68 @@ class SimpleViz(BaseGenerator):
         mermaid_lines.append("    end")
         return service_nodes
 
-    def _add_topics(self, analysis_result: dict, mermaid_lines: list) -> set:
-        """Add topics and their relationships to the diagram."""
-        topic_nodes = set()
-        topic_edges = []
-        mermaid_lines.append("    subgraph Topics")
-
-        # First pass: collect and add all topics
-        for service_info in analysis_result["services"].values():
-            for topic in service_info.get("topics", {}):
-                topic_id = f"topic_{clean_mermaid_id(topic)}"
-                if topic_id not in self.nodes:
-                    display_name = shorten_topic_name(topic)
-                    self.nodes[topic_id] = display_name
-                    topic_nodes.add(topic_id)
-                    mermaid_lines.append(f'        {topic_id}["{display_name}"]')
-
-        # Second pass: add relationships
-        for service_name, service_info in analysis_result["services"].items():
-            service_id = clean_mermaid_id(service_name)
-
-            for topic, topic_info in service_info.get("topics", {}).items():
-                topic_id = f"topic_{clean_mermaid_id(topic)}"
-
-                # Add producer/consumer relationships
-                if service_name in topic_info.get("producers", []):
-                    self.edges.add(f"    {service_id} --> {topic_id}")
-                if service_name in topic_info.get("consumers", []):
-                    self.edges.add(f"    {topic_id} --> {service_id}")
-
-        # Add all edges after node definitions
-        mermaid_lines.extend(sorted(set(topic_edges)))
-        mermaid_lines.append("    end")
-        return topic_nodes
-
     def _add_schemas(self, analysis_result: dict, mermaid_lines: list) -> set:
         """Add schemas and their relationships to the diagram."""
-        schema_nodes = set()
         has_schemas = any(
             service.get("schemas") for service in analysis_result["services"].values()
         )
 
         if has_schemas:
             mermaid_lines.append("    subgraph Schemas")
-            for service_name, service_info in analysis_result["services"].items():
-                service_id = clean_mermaid_id(service_name)
 
+            # First add all unique schema nodes
+            for service_info in analysis_result["services"].values():
                 for schema_name in service_info.get("schemas", {}):
-                    schema_id = f"schema_{clean_mermaid_id(schema_name)}"
-                    if schema_id not in self.nodes:
-                        schema_nodes.add(schema_id)
+                    schema_id = f"schema_{schema_name}"
+                    if schema_id not in self.schema_nodes:
+                        self.schema_nodes.add(schema_id)
                         mermaid_lines.append(f'        {schema_id}["{schema_name}"]')
-                    mermaid_lines.append(f"    {service_id} -.-> {schema_id}")
 
+            # Then add all schema relationships
+            for service_name, service_info in analysis_result["services"].items():
+                service_id = service_name.replace("-", "_")
+                for schema_name in service_info.get("schemas", {}):
+                    schema_id = f"schema_{schema_name}"
+                    self.schema_edges.append(f"    {service_id} -.-> {schema_id}")
+
+            # Add edges in a consistent order
+            mermaid_lines.extend(sorted(set(self.schema_edges)))
             mermaid_lines.append("    end")
 
-        return schema_nodes
+        return self.schema_nodes
+
+    def _add_topics(self, analysis_result: dict, mermaid_lines: list) -> set:
+        """Add topics and their relationships to the diagram."""
+        topic_nodes = set()
+        mermaid_lines.append("    subgraph Topics")
+
+        # First collect all edges
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = service_name.replace("-", "_")
+
+            for topic, topic_info in service_info.get("topics", {}).items():
+                topic_id = f"topic_{clean_mermaid_id(topic)}"
+
+                if topic_id not in self.nodes:
+                    display_name = shorten_topic_name(topic)
+                    self.nodes[topic_id] = display_name
+                    topic_nodes.add(topic_id)
+
+                # Add edges
+                if service_name in topic_info.get("producers", []):
+                    self.edges.append(f"    {service_id} --> {topic_id}")
+                if service_name in topic_info.get("consumers", []):
+                    self.edges.append(f"    {topic_id} --> {service_id}")
+
+        # Add all topic nodes first
+        for topic_id in sorted(topic_nodes):
+            display_name = self.nodes[topic_id]
+            mermaid_lines.append(f'        {topic_id}["{display_name}"]')
+
+        # Add edges after all nodes
+        mermaid_lines.extend(sorted(set(self.edges)))
+        mermaid_lines.append("    end")
+        return topic_nodes
 
     def _add_styling(
         self,
