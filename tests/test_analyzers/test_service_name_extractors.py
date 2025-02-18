@@ -10,16 +10,17 @@ from kafka_viz.analyzers.service_name_extractors import (
 
 def test_java_service_name_extractor_pom_xml(monkeypatch):
     extractor = JavaServiceNameExtractor()
-    pom_content = """<?xml version="1.0" encoding="UTF-8"?>
-    <project xmlns="http://maven.apache.org/POM/4.0.0">
-        <artifactId>test-service</artifactId>
-        <name>Test Service Name</name>
-    </project>"""
+    
+    # Create the XML structure directly
+    root = ET.Element("project")
+    root.set("xmlns", "http://maven.apache.org/POM/4.0.0")
+    artifactId = ET.SubElement(root, "artifactId")
+    artifactId.text = "test-service"
     
     def mock_parse(file_path):
         class MockTree:
             def getroot(self):
-                return ET.fromstring(pom_content)
+                return root
         return MockTree()
     
     monkeypatch.setattr(ET, "parse", mock_parse)
@@ -33,13 +34,15 @@ def test_java_service_name_extractor_fallback(monkeypatch):
     def mock_parse(file_path):
         raise ET.ParseError()
     
-    class MockPath:
-        @property
-        def name(self):
-            return "fallback-name"
+    def mock_path_handler(self):
+        class MockParent:
+            @property
+            def name(self):
+                return "fallback-name"
+        return MockParent()
     
     monkeypatch.setattr(ET, "parse", mock_parse)
-    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
+    monkeypatch.setattr(Path, "parent", mock_path_handler)
     
     result = extractor.extract(Path("/mock/path/pom.xml"))
     assert result == "fallback-name"
@@ -71,17 +74,17 @@ def test_python_service_name_extractor_pyproject(monkeypatch):
 
 def test_csharp_service_name_extractor(monkeypatch):
     extractor = CSharpServiceNameExtractor()
-    csproj_content = """<?xml version="1.0" encoding="utf-8"?>
-    <Project>
-        <PropertyGroup>
-            <AssemblyName>test-service</AssemblyName>
-        </PropertyGroup>
-    </Project>"""
+    
+    # Create the XML structure directly
+    root = ET.Element("Project")
+    prop_group = ET.SubElement(root, "PropertyGroup")
+    assembly_name = ET.SubElement(prop_group, "AssemblyName")
+    assembly_name.text = "test-service"
     
     def mock_parse(file_path):
         class MockTree:
             def getroot(self):
-                return ET.fromstring(csproj_content)
+                return root
         return MockTree()
     
     monkeypatch.setattr(ET, "parse", mock_parse)
@@ -90,7 +93,6 @@ def test_csharp_service_name_extractor(monkeypatch):
     assert result == "test-service"
 
 def test_name_sanitization():
-    # Using JavaServiceNameExtractor as it's a concrete class
     extractor = JavaServiceNameExtractor()
     
     assert extractor._sanitize_name("testService") == "test-service"
@@ -106,17 +108,19 @@ def test_error_handling(monkeypatch):
     python_extractor = PythonServiceNameExtractor()
     csharp_extractor = CSharpServiceNameExtractor()
     
+    def mock_path_handler(self):
+        class MockParent:
+            @property
+            def name(self):
+                return "fallback-name"
+        return MockParent()
+    
     # Test Java extractor with invalid XML
     def mock_parse_error(file_path):
         raise ET.ParseError()
     
-    class MockPath:
-        @property
-        def name(self):
-            return "fallback-name"
-    
     monkeypatch.setattr(ET, "parse", mock_parse_error)
-    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
+    monkeypatch.setattr(Path, "parent", mock_path_handler)
     
     result = java_extractor.extract(Path("/mock/path/pom.xml"))
     assert result == "fallback-name"
@@ -127,7 +131,7 @@ def test_error_handling(monkeypatch):
         return StringIO("invalid json")
     
     monkeypatch.setattr("builtins.open", mock_open_error)
-    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
+    monkeypatch.setattr(Path, "parent", mock_path_handler)
     
     result = js_extractor.extract(Path("/mock/path/package.json"))
     assert result == "fallback-name"
