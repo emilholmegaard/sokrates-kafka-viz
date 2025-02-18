@@ -38,6 +38,7 @@ class ServiceAnalyzer(BaseAnalyzer):
         self.test_dirs = {"test", "tests", "src/test", "src/tests"}
 
     def find_services(self, source_dir: Path) -> AnalysisResult:
+        """Find all microservices in the given source directory."""
         result = AnalysisResult(
             affected_service="root"
         )
@@ -63,6 +64,7 @@ class ServiceAnalyzer(BaseAnalyzer):
         return result
 
     def _detect_service(self, path: Path) -> Optional[Service]:
+        """Detect if path contains a service by looking for build files."""
         if not path.is_dir():
             return None
 
@@ -84,6 +86,7 @@ class ServiceAnalyzer(BaseAnalyzer):
     def _create_service(
         self, path: Path, name: str, language: str, build_file: Path
     ) -> Service:
+        """Create a Service object with proper initialization."""
         service = Service(
             name=name,
             root_path=path,
@@ -113,6 +116,7 @@ class ServiceAnalyzer(BaseAnalyzer):
         return service
 
     def _extract_service_name(self, build_file: Path, language: str) -> Optional[str]:
+        """Extract service name from build file based on language."""
         try:
             extractor = self.name_extractors.get(language)
             if extractor:
@@ -125,6 +129,7 @@ class ServiceAnalyzer(BaseAnalyzer):
     def _analyze_service_dependencies(
         self, service: Service, result: AnalysisResult
     ) -> None:
+        """Analyze service for dependencies and add to results."""
         if service.language == "java":
             self._analyze_java_service(service, result)
         elif service.language == "javascript":
@@ -133,6 +138,7 @@ class ServiceAnalyzer(BaseAnalyzer):
             self._analyze_python_service(service, result)
 
     def _analyze_java_service(self, service: Service, result: AnalysisResult) -> None:
+        """Analyze Java-based service for dependencies."""
         pom_file = service.root_path / "pom.xml"
         if pom_file.exists():
             try:
@@ -145,6 +151,7 @@ class ServiceAnalyzer(BaseAnalyzer):
     def _analyze_spring_cloud_bindings(
         self, service: Service, result: AnalysisResult
     ) -> None:
+        """Analyze Spring Cloud Stream bindings in configuration."""
         config_files = [
             service.root_path / "src/main/resources/application.yml",
             service.root_path / "src/main/resources/application.yaml",
@@ -179,6 +186,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                     logger.warning(f"Error analyzing config file {config_file}: {e}")
 
     def _analyze_node_service(self, service: Service, result: AnalysisResult) -> None:
+        """Analyze Node.js service for dependencies."""
         package_json = service.root_path / "package.json"
         if package_json.exists():
             try:
@@ -218,17 +226,16 @@ class ServiceAnalyzer(BaseAnalyzer):
                 logger.warning(f"Error analyzing package.json for {service.name}: {e}")
 
     def _analyze_python_service(self, service: Service, result: AnalysisResult) -> None:
+        """Analyze Python service for dependencies."""
         requirements_file = service.root_path / "requirements.txt"
         if requirements_file.exists():
             try:
                 content = requirements_file.read_text()
                 service_pattern = re.compile(
-                    r"^([\w-]+(?:-client|-service|-api))(?:[>=<~]|$)",
+                    r"^\s*([\w-]+(?:-client|-service|-api))\s*(?:[>=<~]|$)",
                     re.MULTILINE
                 )
 
-                logger.debug(f"Analyzing requirements content:\n{content}")
-                
                 for match in service_pattern.finditer(content):
                     service_name = match.group(1)
                     logger.debug(f"Found service dependency: {service_name}")
@@ -252,6 +259,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                 )
 
     def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about the service analyzer."""
         return {
             "supported_languages": list(self.build_patterns.keys()),
             "test_directories": list(self.test_dirs),
