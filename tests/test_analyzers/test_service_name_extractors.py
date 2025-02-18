@@ -1,10 +1,14 @@
 import pytest
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from kafka_viz.analyzers.service_name_extractors import (
+    JavaServiceNameExtractor,
+    JavaScriptServiceNameExtractor,
+    PythonServiceNameExtractor,
+    CSharpServiceNameExtractor,
+)
 
 def test_java_service_name_extractor_pom_xml(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import JavaServiceNameExtractor
-    
     extractor = JavaServiceNameExtractor()
     pom_content = """<?xml version="1.0" encoding="UTF-8"?>
     <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -13,31 +17,34 @@ def test_java_service_name_extractor_pom_xml(monkeypatch):
     </project>"""
     
     def mock_parse(file_path):
-        tree = ET.ElementTree(ET.fromstring(pom_content))
-        return tree
-
+        class MockTree:
+            def getroot(self):
+                return ET.fromstring(pom_content)
+        return MockTree()
+    
     monkeypatch.setattr(ET, "parse", mock_parse)
     
     result = extractor.extract(Path("/some/path/pom.xml"))
     assert result == "test-service"
 
 def test_java_service_name_extractor_fallback(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import JavaServiceNameExtractor
-    
     extractor = JavaServiceNameExtractor()
     
     def mock_parse(file_path):
         raise ET.ParseError()
     
+    class MockPath:
+        @property
+        def name(self):
+            return "fallback-name"
+    
     monkeypatch.setattr(ET, "parse", mock_parse)
-    monkeypatch.setattr(Path, "parent", lambda self: Path("/mock/fallback-name"))
+    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
     
     result = extractor.extract(Path("/mock/path/pom.xml"))
     assert result == "fallback-name"
 
 def test_javascript_service_name_extractor(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import JavaScriptServiceNameExtractor
-    
     extractor = JavaScriptServiceNameExtractor()
     package_content = '{"name": "@scope/test-service"}'
     
@@ -51,8 +58,6 @@ def test_javascript_service_name_extractor(monkeypatch):
     assert result == "test-service"
 
 def test_python_service_name_extractor_pyproject(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import PythonServiceNameExtractor
-    
     extractor = PythonServiceNameExtractor()
     pyproject_content = """
     [project]
@@ -65,8 +70,6 @@ def test_python_service_name_extractor_pyproject(monkeypatch):
     assert result == "test-service"
 
 def test_csharp_service_name_extractor(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import CSharpServiceNameExtractor
-    
     extractor = CSharpServiceNameExtractor()
     csproj_content = """<?xml version="1.0" encoding="utf-8"?>
     <Project>
@@ -76,8 +79,10 @@ def test_csharp_service_name_extractor(monkeypatch):
     </Project>"""
     
     def mock_parse(file_path):
-        tree = ET.ElementTree(ET.fromstring(csproj_content))
-        return tree
+        class MockTree:
+            def getroot(self):
+                return ET.fromstring(csproj_content)
+        return MockTree()
     
     monkeypatch.setattr(ET, "parse", mock_parse)
     
@@ -85,13 +90,8 @@ def test_csharp_service_name_extractor(monkeypatch):
     assert result == "test-service"
 
 def test_name_sanitization():
-    from kafka_viz.analyzers.service_name_extractors import ServiceNameExtractor
-    
-    class TestExtractor(ServiceNameExtractor):
-        def extract(self, build_file):
-            pass
-    
-    extractor = TestExtractor()
+    # Using JavaServiceNameExtractor as it's a concrete class
+    extractor = JavaServiceNameExtractor()
     
     assert extractor._sanitize_name("testService") == "test-service"
     assert extractor._sanitize_name("test service") == "test-service"
@@ -101,32 +101,33 @@ def test_name_sanitization():
     assert extractor._sanitize_name("TestService_NAME") == "test-service-name"
 
 def test_error_handling(monkeypatch):
-    from kafka_viz.analyzers.service_name_extractors import (
-        JavaServiceNameExtractor,
-        JavaScriptServiceNameExtractor,
-        PythonServiceNameExtractor,
-        CSharpServiceNameExtractor,
-    )
+    java_extractor = JavaServiceNameExtractor()
+    js_extractor = JavaScriptServiceNameExtractor()
+    python_extractor = PythonServiceNameExtractor()
+    csharp_extractor = CSharpServiceNameExtractor()
     
     # Test Java extractor with invalid XML
-    java_extractor = JavaServiceNameExtractor()
     def mock_parse_error(file_path):
         raise ET.ParseError()
     
+    class MockPath:
+        @property
+        def name(self):
+            return "fallback-name"
+    
     monkeypatch.setattr(ET, "parse", mock_parse_error)
-    monkeypatch.setattr(Path, "parent", lambda self: Path("/mock/fallback-name"))
+    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
     
     result = java_extractor.extract(Path("/mock/path/pom.xml"))
     assert result == "fallback-name"
     
     # Test JavaScript extractor with invalid JSON
-    js_extractor = JavaScriptServiceNameExtractor()
     def mock_open_error(file, mode='r', *args, **kwargs):
         from io import StringIO
         return StringIO("invalid json")
     
     monkeypatch.setattr("builtins.open", mock_open_error)
-    monkeypatch.setattr(Path, "parent", lambda self: Path("/mock/fallback-name"))
+    monkeypatch.setattr(Path, "parent", lambda _: MockPath())
     
     result = js_extractor.extract(Path("/mock/path/package.json"))
     assert result == "fallback-name"
