@@ -18,6 +18,7 @@ from .service_name_extractors import (
 
 logger = logging.getLogger(__name__)
 
+
 class ServiceAnalyzer(BaseAnalyzer):
     """Analyzer for detecting and analyzing microservices."""
 
@@ -39,9 +40,7 @@ class ServiceAnalyzer(BaseAnalyzer):
 
     def find_services(self, source_dir: Path) -> AnalysisResult:
         """Find all microservices in the given source directory."""
-        result = AnalysisResult(
-            affected_service="root"
-        )
+        result = AnalysisResult(affected_service="root")
         root_path = Path(source_dir)
         processed_dirs: Set[Path] = set()
 
@@ -74,13 +73,19 @@ class ServiceAnalyzer(BaseAnalyzer):
                 if build_file.exists():
                     name = self._extract_service_name(build_file, language)
                     if name:
-                        logger.debug(f"Found service '{name}' ({language}) in {build_file}")
+                        logger.debug(
+                            f"Found service '{name}' ({language}) in {build_file}"
+                        )
                         service = self._create_service(path, name, language, build_file)
                         if service:
-                            logger.debug(f"Successfully created service object for {name}")
+                            logger.debug(
+                                f"Successfully created service object for {name}"
+                            )
                             return service
                         else:
-                            logger.warning(f"Failed to create service object for {name}")
+                            logger.warning(
+                                f"Failed to create service object for {name}"
+                            )
         return None
 
     def _create_service(
@@ -104,7 +109,9 @@ class ServiceAnalyzer(BaseAnalyzer):
 
         for ext in extensions:
             found_files = list(path.rglob(f"*{ext}"))
-            logger.debug(f"Found {len(found_files)} files with extension {ext}: {found_files}")
+            logger.debug(
+                f"Found {len(found_files)} files with extension {ext}: {found_files}"
+            )
 
             for source_file in found_files:
                 if not any(
@@ -233,7 +240,7 @@ class ServiceAnalyzer(BaseAnalyzer):
                 content = requirements_file.read_text()
                 service_pattern = re.compile(
                     r"^\s*([\w-]+(?:-client|-service|-api))\s*(?:[>=<~]|$)",
-                    re.MULTILINE
+                    re.MULTILINE,
                 )
 
                 for match in service_pattern.finditer(content):
