@@ -48,11 +48,8 @@ def test_analyze_python_service(service_analyzer):
     service = Service(name="test-service", root_path=Path("/mock/path"))
     result = AnalysisResult(affected_service="test-service")
     
-    # Note: No whitespace at start of lines to match regex pattern ^
-    requirements_content = """flask>=2.0.0
-auth-service-client>=1.0.0
-database-api~=2.1.0
-pytest>=6.0.0"""
+    # Note: Each line starts at the beginning with no whitespace
+    requirements_content = "flask>=2.0.0\nauth-service-client>=1.0.0\ndatabase-api~=2.1.0\npytest>=6.0.0"
     
     with patch("pathlib.Path.exists") as mock_exists, \
          patch("pathlib.Path.read_text") as mock_read_text:
@@ -111,9 +108,7 @@ def test_analyze_python_service_no_dependencies(service_analyzer):
     service = Service(name="test-service", root_path=Path("/mock/path"))
     result = AnalysisResult(affected_service="test-service")
     
-    requirements_content = """flask>=2.0.0
-pytest>=6.0.0
-requests==2.26.0"""
+    requirements_content = "flask>=2.0.0\npytest>=6.0.0\nrequests==2.26.0"
     
     with patch("pathlib.Path.exists") as mock_exists, \
          patch("pathlib.Path.read_text") as mock_read_text:
