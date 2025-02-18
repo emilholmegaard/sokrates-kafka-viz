@@ -102,32 +102,27 @@ class AvroAnalyzer(BaseAnalyzer):
             return None
 
     def analyze_jvm_source(self, file_path: Path) -> Optional[AvroSchema]:
-        """Analyze Java/Kotlin/Scala source file for Avro classes.
-
-        Args:
-            file_path: Path to source file
-
-        Returns:
-            AvroSchema object or None if no Avro class found
-        """
         try:
             with open(file_path) as f:
                 content = f.read()
 
-            # Check for @AvroGenerated annotation
-            if not re.search(self.patterns["avro_annotation"], content):
-                return None
-
-            # Parse Java source
+            # Parse Java source first
             tree = javalang.parse.parse(content)
 
             # Find class with @AvroGenerated
             for class_decl in tree.types:
-                if any(anno.name == "AvroGenerated" for anno in class_decl.annotations):
+                # Check for either full or short annotation name
+                if any(
+                    anno.name == "AvroGenerated"
+                    or anno.name == "org.apache.avro.specific.AvroGenerated"
+                    for anno in class_decl.annotations
+                ):
                     fields = {}
                     for field in class_decl.fields:
                         field_type = self._get_java_field_type(field)
-                        fields[field.name] = field_type
+                        # Get field name from declarator
+                        for declarator in field.declarators:
+                            fields[declarator.name] = field_type
 
                     return AvroSchema(
                         name=class_decl.name,
@@ -263,27 +258,31 @@ class AvroAnalyzer(BaseAnalyzer):
         Returns:
             Field type string
         """
-        # Handle primitive types
-        if hasattr(field.type, "name"):
-            type_name = field.type.name
-            if type_name in ["int", "long", "float", "double", "boolean", "String"]:
-                return type_name.lower()
+        try:
+            # Handle primitive types
+            if hasattr(field.type, "name"):
+                type_name = field.type.name
+                if type_name in ["int", "long", "float", "double", "boolean", "String"]:
+                    return type_name.lower()
 
-        # Handle arrays
-        if hasattr(field.type, "dimensions") and field.type.dimensions:
-            base_type = self._get_java_field_type(field.type)
-            return f"array({base_type})"
+            # Handle arrays
+            if hasattr(field.type, "dimensions") and field.type.dimensions:
+                base_type = self._get_java_field_type(field.type)
+                return f"array({base_type})"
 
-        # Handle generic types
-        if hasattr(field.type, "arguments"):
-            base_type = field.type.name
-            if field.type.arguments:
-                arg_types = [
-                    self._get_java_field_type(arg) for arg in field.type.arguments
-                ]
-                return f"{base_type}<{','.join(arg_types)}>"
+            # Handle generic types
+            if hasattr(field.type, "arguments"):
+                base_type = field.type.name
+                if field.type.arguments:
+                    arg_types = [
+                        self._get_java_field_type(arg) for arg in field.type.arguments
+                    ]
+                    return f"{base_type}<{','.join(arg_types)}>"
 
-        return "object"
+            return "object"
+        except Exception as e:
+            logger.debug(f"Error getting field type: {e}")
+            return "object"
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about the Avro analysis."""
