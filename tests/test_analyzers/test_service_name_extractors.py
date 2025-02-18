@@ -23,15 +23,11 @@ def test_java_service_name_extractor_pom_xml():
     </project>"""
     
     mock_file = Path("/mock/path/pom.xml")
+    root = ET.fromstring(pom_content)
     
-    with patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent, \
-         patch("xml.etree.ElementTree.parse") as mock_parse:
-        
-        mock_parent.name = "fallback-name"
-        
-        # Set up XML mocking
+    with patch("xml.etree.ElementTree.parse") as mock_parse:
         mock_tree = MagicMock()
-        mock_tree.getroot.return_value = ET.fromstring(pom_content)
+        mock_tree.getroot.return_value = root
         mock_parse.return_value = mock_tree
         
         result = extractor.extract(mock_file)
@@ -172,17 +168,21 @@ def test_error_handling():
     # Test Java extractor with invalid XML
     mock_pom = Path("/mock/path/pom.xml")
     with patch("xml.etree.ElementTree.parse") as mock_parse, \
-         patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
+         patch.object(Path, "parent") as mock_parent:
         mock_parse.side_effect = ET.ParseError("Invalid XML")
-        mock_parent.name = "fallback-name"
+        mock_parent_instance = MagicMock()
+        mock_parent_instance.name = "fallback-name"
+        mock_parent.return_value = mock_parent_instance
         result = java_extractor.extract(mock_pom)
         assert result == "fallback-name"
     
     # Test JavaScript extractor with invalid JSON
     mock_package = Path("/mock/path/package.json")
     with patch("builtins.open", mock_open(read_data="invalid json")), \
-         patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
-        mock_parent.name = "fallback-name"
+         patch.object(Path, "parent") as mock_parent:
+        mock_parent_instance = MagicMock()
+        mock_parent_instance.name = "fallback-name"
+        mock_parent.return_value = mock_parent_instance
         result = js_extractor.extract(mock_package)
         assert result == "fallback-name"
     
