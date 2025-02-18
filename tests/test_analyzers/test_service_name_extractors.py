@@ -22,16 +22,19 @@ def test_java_service_name_extractor_pom_xml():
         <name>Test Service Name</name>
     </project>"""
     
-    with patch("pathlib.Path.open", mock_open(read_data=pom_content)), \
+    mock_file = Path("/mock/path/pom.xml")
+    
+    with patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent, \
          patch("xml.etree.ElementTree.parse") as mock_parse:
         
-        # Mock the XML parsing
+        mock_parent.name = "fallback-name"
+        
+        # Set up XML mocking
         mock_tree = MagicMock()
-        mock_root = ET.fromstring(pom_content)
-        mock_tree.getroot.return_value = mock_root
+        mock_tree.getroot.return_value = ET.fromstring(pom_content)
         mock_parse.return_value = mock_tree
         
-        result = extractor.extract(Path("pom.xml"))
+        result = extractor.extract(mock_file)
         assert result == "test-service"
 
 def test_java_service_name_extractor_gradle():
@@ -63,12 +66,13 @@ def test_javascript_service_name_extractor():
 
 def test_javascript_service_name_extractor_fallback():
     extractor = JavaScriptServiceNameExtractor()
+    mock_file = Path("/mock/path/package.json")
     
     with patch("builtins.open", mock_open(read_data="{}")), \
-         patch.object(Path, "parent") as mock_parent:
+         patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
         
         mock_parent.name = "fallback-service"
-        result = extractor.extract(Path("package.json"))
+        result = extractor.extract(mock_file)
         assert result == "fallback-service"
 
 def test_python_service_name_extractor_setup_py():
@@ -102,10 +106,11 @@ def test_python_service_name_extractor_pyproject_toml():
 
 def test_python_service_name_extractor_requirements_txt():
     extractor = PythonServiceNameExtractor()
+    mock_file = Path("/mock/path/requirements.txt")
     
-    with patch.object(Path, "parent") as mock_parent:
+    with patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
         mock_parent.name = "test-service"
-        result = extractor.extract(Path("requirements.txt"))
+        result = extractor.extract(mock_file)
         assert result == "test-service"
 
 def test_csharp_service_name_extractor():
@@ -132,10 +137,11 @@ def test_csharp_service_name_extractor():
 
 def test_csharp_service_name_extractor_fallback():
     extractor = CSharpServiceNameExtractor()
+    mock_file = Path("/mock/path/test-service.csproj")
     
     with patch("xml.etree.ElementTree.parse") as mock_parse:
         mock_parse.side_effect = Exception("Parse error")
-        result = extractor.extract(Path("test-service.csproj"))
+        result = extractor.extract(mock_file)
         assert result == "test-service"
 
 def test_name_sanitization():
@@ -164,15 +170,21 @@ def test_error_handling():
     csharp_extractor = CSharpServiceNameExtractor()
     
     # Test Java extractor with invalid XML
-    with patch("xml.etree.ElementTree.parse") as mock_parse:
+    mock_pom = Path("/mock/path/pom.xml")
+    with patch("xml.etree.ElementTree.parse") as mock_parse, \
+         patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
         mock_parse.side_effect = ET.ParseError("Invalid XML")
-        result = java_extractor.extract(Path("pom.xml"))
-        assert result is None
+        mock_parent.name = "fallback-name"
+        result = java_extractor.extract(mock_pom)
+        assert result == "fallback-name"
     
     # Test JavaScript extractor with invalid JSON
-    with patch("builtins.open", mock_open(read_data="invalid json")):
-        result = js_extractor.extract(Path("package.json"))
-        assert result is not None  # Should fall back to directory name
+    mock_package = Path("/mock/path/package.json")
+    with patch("builtins.open", mock_open(read_data="invalid json")), \
+         patch("pathlib.Path.parent", new_callable=MagicMock) as mock_parent:
+        mock_parent.name = "fallback-name"
+        result = js_extractor.extract(mock_package)
+        assert result == "fallback-name"
     
     # Test Python extractor with invalid file
     with patch("pathlib.Path.read_text") as mock_read_text:
@@ -184,4 +196,4 @@ def test_error_handling():
     with patch("xml.etree.ElementTree.parse") as mock_parse:
         mock_parse.side_effect = Exception("Parse error")
         result = csharp_extractor.extract(Path("test.csproj"))
-        assert result == "test"  # Should fall back to file stem
+        assert result == "test"
