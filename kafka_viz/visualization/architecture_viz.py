@@ -4,7 +4,7 @@ from .base import BaseGenerator
 
 
 class ArchitectureVisualizer(BaseGenerator):
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize the visualizer with architecture data
 
@@ -24,13 +24,13 @@ class ArchitectureVisualizer(BaseGenerator):
         services = set(self.data.get("services", {}).keys())
         return sorted(services)
 
-    def _extract_schemas(self) -> Set[str]:
+    def _extract_schemas(self) -> List[str]:
         """
         Extract unique schemas from services
 
-        :return: Sorted set of schema names
+        :return: Sorted list of schema names
         """
-        schemas = set()
+        schemas: Set[str] = set()
         for service_info in self.data.get("services", {}).values():
             schemas.update(service_info.get("schemas", {}).keys())
         return sorted(schemas)
