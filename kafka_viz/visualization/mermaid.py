@@ -116,11 +116,8 @@ def generate_mermaid(analysis_result):
     return "\n".join(mermaid_code)
 
 
-def visualize(analysis_file):
+def visualize(analysis_result: dict):
     """Create visualization with Kafka dependencies."""
-    with open(analysis_file, "r") as f:
-        analysis_result = json.load(f)
-
     mermaid_code = generate_mermaid(analysis_result)
 
     html_template = (
