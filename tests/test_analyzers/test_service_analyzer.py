@@ -79,12 +79,7 @@ def test_analyze_python_service(service_analyzer):
     service = Service(name="test-service", root_path=Path("/mock/path"))
     result = AnalysisResult(affected_service="test-service")
     
-    requirements_content = """
-    flask>=2.0.0
-    auth-service-client>=1.0.0
-    database-api~=2.1.0
-    pytest>=6.0.0
-    """
+    requirements_content = "flask>=2.0.0\nauth-service-client>=1.0.0\ndatabase-api~=2.1.0\npytest>=6.0.0"
     
     with patch("pathlib.Path.exists") as mock_exists, \
          patch("pathlib.Path.read_text") as mock_read_text:
@@ -94,41 +89,67 @@ def test_analyze_python_service(service_analyzer):
         
         service_analyzer._analyze_python_service(service, result)
         
+        # Verify relationships were created
         assert len(result.service_relationships) == 2  # auth-service-client and database-api
-        assert any(r.target == "auth-service-client" for r in result.service_relationships)
-        assert any(r.target == "database-api" for r in result.service_relationships)
+        relationships = {r.target: r for r in result.service_relationships}
+        assert "auth-service-client" in relationships
+        assert "database-api" in relationships
+        assert all(r.type == "python-dependency" for r in result.service_relationships)
+
+def test_analyze_python_service_no_dependencies(service_analyzer):
+    """Test Python service analysis with no service dependencies."""
+    service = Service(name="test-service", root_path=Path("/mock/path"))
+    result = AnalysisResult(affected_service="test-service")
+    
+    requirements_content = "flask>=2.0.0\npytest>=6.0.0\nrequests==2.26.0"
+    
+    with patch("pathlib.Path.exists") as mock_exists, \
+         patch("pathlib.Path.read_text") as mock_read_text:
+        
+        mock_exists.return_value = True
+        mock_read_text.return_value = requirements_content
+        
+        service_analyzer._analyze_python_service(service, result)
+        assert len(result.service_relationships) == 0
+
+def test_analyze_python_service_malformed_requirements(service_analyzer):
+    """Test Python service analysis with malformed requirements."""
+    service = Service(name="test-service", root_path=Path("/mock/path"))
+    result = AnalysisResult(affected_service="test-service")
+    
+    requirements_content = "malformed==content\nauth-service-client"  # Missing version spec
+    
+    with patch("pathlib.Path.exists") as mock_exists, \
+         patch("pathlib.Path.read_text") as mock_read_text:
+        
+        mock_exists.return_value = True
+        mock_read_text.return_value = requirements_content
+        
+        service_analyzer._analyze_python_service(service, result)
+        assert len(result.service_relationships) == 0  # Should handle malformed content gracefully
 
 def test_analyze_java_service(service_analyzer):
     """Test Java service dependency analysis."""
     service = Service(name="test-service", root_path=Path("/mock/path"))
     result = AnalysisResult(affected_service="test-service")
     
-    pom_content = """
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter</artifactId>
-        </dependency>
-    </dependencies>
-    """
-    
-    application_yaml = """
-    services:
-        auth-service.url=http://auth-service:8080
-        data-service.url=http://data-service:8080
-    """
+    pom_content = "<dependencies><dependency><groupId>org.springframework.cloud</groupId></dependency></dependencies>"
+    application_yaml = "services:\n  auth-service.url=http://auth-service:8080\n  data-service.url=http://data-service:8080"
     
     with patch("pathlib.Path.exists") as mock_exists, \
          patch("pathlib.Path.read_text") as mock_read_text:
         
         mock_exists.return_value = True
+        # First call returns pom_content, second returns application_yaml
         mock_read_text.side_effect = [pom_content, application_yaml]
         
         service_analyzer._analyze_java_service(service, result)
         
         assert len(result.service_relationships) == 2
-        assert any(r.target == "auth-service" for r in result.service_relationships)
-        assert any(r.target == "data-service" for r in result.service_relationships)
+        relationships = {r.target: r for r in result.service_relationships}
+        assert "auth-service" in relationships
+        assert "data-service" in relationships
+        assert all(r.type == "spring-cloud" for r in result.service_relationships)
 
 def test_find_services_integration(service_analyzer, tmp_path):
     """Integration test for finding services in a directory structure."""
