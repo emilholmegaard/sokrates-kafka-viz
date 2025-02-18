@@ -1,3 +1,21 @@
+import pytest
+from pathlib import Path
+from kafka_viz.models.service import Service
+from kafka_viz.models.service_registry import AnalysisResult
+from kafka_viz.analyzers.service_analyzer import ServiceAnalyzer
+
+@pytest.fixture
+def service_analyzer():
+    return ServiceAnalyzer()
+
+@pytest.fixture
+def mock_service():
+    return Service(name="test-service", root_path=Path("/mock/path"))
+
+@pytest.fixture
+def mock_result():
+    return AnalysisResult(affected_service="test-service")
+
 def test_analyze_java_service(
     service_analyzer, mock_service, mock_result, monkeypatch
 ):
@@ -18,8 +36,10 @@ def test_analyze_java_service(
     """
 
     # Mock file existence and content reading
+    read_counts = {"pom.xml": 0}
     def mock_read_text(self):
         if self.name == "pom.xml":
+            read_counts["pom.xml"] += 1
             return pom_content
         return application_properties
 
