@@ -39,28 +39,15 @@ class ServiceAnalyzer(BaseAnalyzer):
         self.test_dirs = {"test", "tests", "src/test", "src/tests"}
 
     def find_services(self, source_dir: Path) -> AnalysisResult:
-        """Find all microservices in the given source directory.
-
-        Args:
-            source_dir: Root directory containing microservices
-
-        Returns:
-            AnalysisResult containing discovered services and their relationships
-        """
-        result = AnalysisResult(
-            affected_service="root"
-        )  # Special case for service discovery
+        """Find all microservices in the given source directory."""
+        result = AnalysisResult(affected_service="root")
         root_path = Path(source_dir)
-
-        # Track processed directories to avoid duplicate services
         processed_dirs: Set[Path] = set()
 
-        # Walk through all directories
         for path in root_path.rglob("*"):
             if not path.is_dir() or path in processed_dirs:
                 continue
 
-            # Skip test directories only if they are at the root level
             parent_is_root = path.parent == root_path
             if parent_is_root and path.name in self.test_dirs:
                 continue
@@ -69,10 +56,7 @@ class ServiceAnalyzer(BaseAnalyzer):
             if service:
                 result.discovered_services[service.name] = service
                 processed_dirs.add(path)
-                # Add all parent directories to processed to avoid duplicate detection
                 processed_dirs.update(path.parents)
-
-                # Analyze service for dependencies and add relationships
                 self._analyze_service_dependencies(service, result)
 
         logger.debug(f"Found {len(result.discovered_services)} services in {root_path}")
@@ -104,23 +88,6 @@ class ServiceAnalyzer(BaseAnalyzer):
                             )
         return None
 
-    def _detect_service_old(self, path: Path) -> Optional[Service]:
-        """Detect if path contains a service by looking for build files."""
-        if not path.is_dir():
-            return None
-
-        for language, patterns in self.build_patterns.items():
-            for pattern in patterns:
-                build_file = path / pattern
-                if build_file.exists():
-                    name = self._extract_service_name(build_file, language)
-                    if name:
-                        logger.debug(
-                            f"Found service '{name}' ({language}) in {build_file}"
-                        )
-                        return self._create_service(path, name, language, build_file)
-        return None
-
     def _create_service(
         self, path: Path, name: str, language: str, build_file: Path
     ) -> Service:
@@ -133,7 +100,6 @@ class ServiceAnalyzer(BaseAnalyzer):
         )
         logger.debug(f"Creating service {name} at path {path} with language {language}")
 
-        # Add source files
         extensions = {
             "java": [".java"],
             "python": [".py"],
@@ -180,13 +146,11 @@ class ServiceAnalyzer(BaseAnalyzer):
 
     def _analyze_java_service(self, service: Service, result: AnalysisResult) -> None:
         """Analyze Java-based service for dependencies."""
-        # Check for Spring Cloud dependencies in pom.xml
         pom_file = service.root_path / "pom.xml"
         if pom_file.exists():
             try:
                 content = pom_file.read_text()
                 if "spring-cloud" in content:
-                    # Look for Spring Cloud Stream bindings
                     self._analyze_spring_cloud_bindings(service, result)
             except Exception as e:
                 logger.warning(f"Error analyzing pom.xml for {service.name}: {e}")
@@ -205,25 +169,22 @@ class ServiceAnalyzer(BaseAnalyzer):
             if config_file.exists():
                 try:
                     content = config_file.read_text()
-                    # Look for service dependencies in configuration
                     service_pattern = re.compile(r"([\w-]+)\.url\s*=\s*([^\s]+)")
 
                     for match in service_pattern.finditer(content):
                         dep_service_name = match.group(1)
                         service_url = match.group(2)
 
-                        # Add as discovered service if not already known
                         if dep_service_name not in result.discovered_services:
                             dep_service = Service(
                                 name=dep_service_name, root_path=service.root_path
                             )
                             result.discovered_services[dep_service_name] = dep_service
 
-                        # Add relationship
                         relationship = ServiceRelationship(
                             source=service.name,
                             target=dep_service_name,
-                            type="spring-cloud",  # Changed from type_ to type
+                            type="spring-cloud",
                             details={"url": service_url},
                         )
                         result.service_relationships.append(relationship)
@@ -243,7 +204,6 @@ class ServiceAnalyzer(BaseAnalyzer):
                     **data.get("devDependencies", {}),
                 }
 
-                # Look for microservice-related dependencies
                 service_deps = [
                     d
                     for d in deps
@@ -253,21 +213,18 @@ class ServiceAnalyzer(BaseAnalyzer):
                 ]
 
                 for dep in service_deps:
-                    # Convert npm package names to service names
                     service_name = dep.replace("@", "").replace("/", "-")
 
-                    # Add as discovered service
                     if service_name not in result.discovered_services:
                         dep_service = Service(
                             name=service_name, root_path=service.root_path
                         )
                         result.discovered_services[service_name] = dep_service
 
-                    # Add relationship
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
-                        type="npm-dependency",  # Changed from type_ to type
+                        type="npm-dependency",
                         details={"version": deps[dep]},
                     )
                     result.service_relationships.append(relationship)
@@ -281,26 +238,25 @@ class ServiceAnalyzer(BaseAnalyzer):
         if requirements_file.exists():
             try:
                 content = requirements_file.read_text()
-                # Look for service-related dependencies
                 service_pattern = re.compile(
-                    r"^([a-zA-Z0-9-]+(?:-client|-service|-api))[>=<~]"
+                    r"^\s*([\w-]+(?:-client|-service|-api))\s*(?:[>=<~]|$)",
+                    re.MULTILINE,
                 )
 
                 for match in service_pattern.finditer(content):
                     service_name = match.group(1)
+                    logger.debug(f"Found service dependency: {service_name}")
 
-                    # Add as discovered service
                     if service_name not in result.discovered_services:
                         dep_service = Service(
                             name=service_name, root_path=service.root_path
                         )
                         result.discovered_services[service_name] = dep_service
 
-                    # Add relationship
                     relationship = ServiceRelationship(
                         source=service.name,
                         target=service_name,
-                        type="python-dependency",  # Changed from type_ to type
+                        type="python-dependency",
                     )
                     result.service_relationships.append(relationship)
 

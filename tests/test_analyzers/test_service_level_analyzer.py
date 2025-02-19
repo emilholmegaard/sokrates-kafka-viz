@@ -14,7 +14,7 @@ class MockServiceLevelAnalyzer(ServiceLevelAnalyzer):
 
     def __init__(self) -> None:
         self.analyze_called = False
-        self.last_services = None
+        self.last_services = ServiceCollection()
 
     def analyze_services(self, services: ServiceCollection) -> None:
         self.analyze_called = True
