@@ -1,63 +1,15 @@
+from pathlib import Path
+
 from .base import BaseGenerator
-
-
-def clean_node_id(topic: str) -> str:
-    """Create safe node ID by replacing invalid characters."""
-    # Special case for hash topic
-    if topic == "#{":
-        return "topic_hash"
-
-    replacements = {
-        "${": "",
-        "}": "",
-        "-": "_",
-        ".": "_",
-        "#": "hash",
-        "@": "at",
-        " ": "_",
-        ":": "_",
-        "/": "_",
-        "\\": "_",
-        "{": "",  # Add explicit handling for curly braces
-        "}": "",
-    }
-    result = topic
-    for old, new in replacements.items():
-        result = result.replace(old, new)
-    return result
-
-
-def format_topic_name(topic: str) -> str:
-    """Format topic name for display."""
-    if topic == "#{":
-        return "hash_topic"
-    if topic == "M" or topic == "topic":
-        return topic
-
-    if "kafka.streams" in topic:
-        parts = topic.replace("${", "").replace("}", "").split(".")
-        meaningful_part = parts[-1]
-        if meaningful_part == "target-topic":
-            meaningful_part = "target"
-        return f"kafka.streams...{meaningful_part}"
-
-    if topic.startswith("app"):
-        parts = topic.split(".")
-        if "event" in parts:
-            event_idx = parts.index("event")
-            if event_idx + 1 < len(parts):
-                return f"app...{parts[event_idx+1]}"
-        return f"app...{parts[-1]}"
-
-    if topic.startswith("${config"):
-        parts = topic.replace("${", "").replace("}", "").split(".")
-        return f"config.kafka...{parts[-1]}"
-
-    return topic
+from .utils import clean_node_id, format_topic_name
 
 
 class SimpleViz(BaseGenerator):
+    """Simple visualization using Mermaid diagram."""
+    
     def __init__(self):
+        self.name = "Simple HTML"
+        self.description = "Basic HTML visualization with Mermaid diagram"
         self.nodes = {}  # {node_id: display_name}
         self.edges = []  # List to maintain edge order
         self.schema_nodes = set()  # Track unique schema nodes
@@ -103,7 +55,7 @@ class SimpleViz(BaseGenerator):
         schema_edges = []
         for service_name, service_info in analysis_result["services"].items():
             service_id = clean_node_id(service_name)
-            for schema_name in service_info.get("schemas", {}):
+            for schema_name in service_info.get("schemas", {}).keys():
                 schema_id = f"schema_{clean_node_id(schema_name)}"
                 if schema_id not in schemas:
                     schemas.append(schema_id)
@@ -188,3 +140,21 @@ class SimpleViz(BaseGenerator):
         # Double up curly braces in the template for literal curly braces
         result = html_template.format(diagram_content=mermaid_code)
         return result
+        
+    def generate_output(self, data: dict, file_path: Path) -> None:
+        """Generate the visualization output."""
+        try:
+            html_content = self.generate_html(data)
+            
+            # Ensure directory exists
+            if not file_path.exists():
+                file_path.mkdir(parents=True)
+                
+            output_file = file_path / "simple_architecture.html"
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(html_content)
+                
+            print(f"Simple visualization generated at {output_file}")
+        except Exception as e:
+            print(f"Error generating Simple visualization: {e}")
+            raise
