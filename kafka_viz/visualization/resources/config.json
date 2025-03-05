@@ -1,0 +1,19 @@
+{
+  "visualizations": {
+    "react": {
+      "name": "React Interactive",
+      "description": "Interactive D3.js visualization with React UI",
+      "enabled": true
+    },
+    "mermaid": {
+      "name": "Mermaid Diagram",
+      "description": "Simple Mermaid.js flowchart diagram",
+      "enabled": true
+    },
+    "simple": {
+      "name": "Simple HTML",
+      "description": "Basic HTML visualization",
+      "enabled": true
+    }
+  }
+}
