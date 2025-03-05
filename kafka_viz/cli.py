@@ -1,17 +1,15 @@
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.progress import Progress
+from rich.table import Table
 
 from .analyzers.analyzer_manager import AnalyzerManager
-
-# from .visualization.mermaid import MermaidGenerator
-from .visualization.simple_viz import SimpleViz
-
-# from .visualization.architecture_viz import ArchitectureVisualizer
+from .visualization.utils import get_available_visualizations, get_generator_by_name
 
 app = typer.Typer()
 console = Console()
@@ -112,11 +110,11 @@ def analyze(
                 "Analyzing schemas...", total=len(services.services)
             )
             for service in services.services.values():
-                logger.debug(f"Analyzing schemas for service: {service_name}")
+                logger.debug(f"Analyzing schemas for service: {service.name}")
                 analyzer_manager.analyze_schemas(service)
                 if service.schemas:
                     logger.debug(
-                        f"Found {len(service.schemas)} schemas in {service_name}"
+                        f"Found {len(service.schemas)} schemas in {service.name}"
                     )
                 progress.advance(task)
             progress.remove_task(task)
@@ -149,7 +147,7 @@ def analyze(
                                 logger.warning(f"Error analyzing file {file_path}: {e}")
 
                 logger.debug(
-                    f"Service {service_name} analysis complete: "
+                    f"Service {service.name} analysis complete: "
                     f"analyzed {files_analyzed} files, "
                     f"found {topics_found} topics"
                 )
@@ -161,12 +159,10 @@ def analyze(
 
         # Print summary
         console.print(
-            f"\
-[green]Analysis complete! Results written to {output}"
+            f"[green]Analysis complete! Results written to {output}"
         )
         console.print(
-            "\
-Analysis Summary:"
+            "Analysis Summary:"
         )
         console.print(f"- Total services analyzed: {len(services.services)}")
         total_topics = sum(
@@ -190,29 +186,116 @@ def visualize(
         ..., help="JSON file containing analysis results", exists=True
     ),
     output: Path = typer.Option(
-        "architecture.html", help="Output HTML file for visualization"
+        "kafka_visualization", help="Output directory for visualization"
+    ),
+    visualization_type: Optional[str] = typer.Option(
+        None, "--type", "-t", help="Type of visualization to generate"
+    ),
+    list_visualizations: bool = typer.Option(
+        False, "--list", "-l", help="List available visualization types"
     ),
 ):
     """Generate visualization from analysis results."""
+    
+    # List available visualizations if requested
+    available_vis = get_available_visualizations()
+    
+    if list_visualizations:
+        console.print("[bold]Available Visualization Types:[/bold]")
+        table = Table(show_header=True, header_style="bold blue")
+        table.add_column("ID", style="dim")
+        table.add_column("Name")
+        table.add_column("Description")
+        
+        for vis_id, vis_info in available_vis.items():
+            table.add_row(
+                vis_id,
+                vis_info["name"],
+                vis_info["description"]
+            )
+        
+        console.print(table)
+        return
+
+    # If no visualization type specified, use interactive selection
+    if not visualization_type:
+        options = list(available_vis.keys())
+        if not options:
+            console.print("[red]No visualization types available.")
+            raise typer.Exit(1)
+        
+        console.print("[bold]Select visualization type:[/bold]")
+        for i, vis_id in enumerate(options):
+            console.print(f"[{i+1}] {available_vis[vis_id]['name']} - {available_vis[vis_id]['description']}")
+        
+        choice = 0
+        while choice < 1 or choice > len(options):
+            try:
+                choice = int(typer.prompt("Enter number", default="1"))
+                if choice < 1 or choice > len(options):
+                    console.print(f"[red]Please enter a number between 1 and {len(options)}[/red]")
+            except ValueError:
+                console.print("[red]Please enter a valid number[/red]")
+        
+        visualization_type = options[choice - 1]
+
+    # Check if the specified visualization type exists
+    if visualization_type not in available_vis:
+        console.print(f"[red]Error: Visualization type '{visualization_type}' not found. Use --list to see available types.[/red]")
+        raise typer.Exit(1)
+
     try:
         # Load analysis results
         with open(input_file) as f:
             data = json.load(f)
 
+        # Get the appropriate generator for the selected visualization type
+        generator_class = get_generator_by_name(visualization_type)
+        if not generator_class:
+            console.print(f"[red]Error: Visualization generator '{visualization_type}' not found.[/red]")
+            raise typer.Exit(1)
+            
+        generator = generator_class()
+        
         # Generate visualization
-        # generator = MermaidGenerator()
-        generator = SimpleViz()
-        # generator = ArchitectureVisualizer()
-        html_content = generator.generate_html(data)
-
-        with open(output, "w") as f:
-            f.write(html_content)
-
-        console.print(f"\n[green]Visualization generated at {output}")
+        console.print(f"Generating [bold]{available_vis[visualization_type]['name']}[/bold] visualization...")
+        
+        # Create output directory
+        output_dir = Path(output)
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True)
+            
+        # Generate output
+        generator.generate_output(data, output_dir)
+        
+        console.print(f"[green]Visualization generated at {output_dir}[/green]")
 
     except Exception as e:
-        console.print(f"[red]Error generating visualization: {e}")
+        console.print(f"[red]Error generating visualization: {e}[/red]")
         raise typer.Exit(1)
+
+
+@app.command()
+def info():
+    """Show information about available visualizations."""
+    
+    available_vis = get_available_visualizations()
+    
+    console.print("[bold]Kafka Visualization Options:[/bold]")
+    table = Table(show_header=True, header_style="bold blue")
+    table.add_column("ID", style="dim")
+    table.add_column("Name")
+    table.add_column("Description")
+    
+    for vis_id, vis_info in available_vis.items():
+        table.add_row(
+            vis_id,
+            vis_info["name"],
+            vis_info["description"]
+        )
+    
+    console.print(table)
+    console.print("\nUse [bold]visualize --type TYPE[/bold] to select a specific visualization type.")
 
 
 if __name__ == "__main__":
