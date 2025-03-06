@@ -1,0 +1,240 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 300px;
+    background-color: white;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    overflow-y: auto;
+}
+
+.sidebar h1 {
+    font-size: 24px;
+    margin-top: 0;
+    color: #2196f3;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 10px;
+}
+
+.sidebar h2 {
+    font-size: 18px;
+    margin-top: 25px;
+    color: #333;
+}
+
+.sidebar p {
+    line-height: 1.5;
+    font-size: 14px;
+    color: #555;
+}
+
+.visualization-list {
+    margin: 20px 0;
+}
+
+.visualization-item {
+    background-color: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 10px;
+    transition: all 0.2s ease;
+}
+
+.visualization-item:hover {
+    background-color: #e3f2fd;
+    border-color: #2196f3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.visualization-name {
+    font-weight: bold;
+    font-size: 16px;
+    color: #2196f3;
+    margin-bottom: 5px;
+}
+
+.visualization-description {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.visualization-link {
+    display: inline-block;
+    text-decoration: none;
+    background-color: #2196f3;
+    color: white;
+    padding: 5px 10px;
+    font-size: 13px;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+}
+
+.visualization-link:hover {
+    background-color: #1976d2;
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.stats {
+    display: flex;
+    margin: 15px 0;
+}
+
+.stat-item {
+    flex: 1;
+    text-align: center;
+    background-color: #e3f2fd;
+    padding: 10px;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+.stat-item:last-child {
+    margin-right: 0;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2196f3;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #555;
+    margin-top: 5px;
+}
+
+.preview-container {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-header {
+    margin-bottom: 20px;
+}
+
+.preview-header h2 {
+    font-size: 22px;
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.preview-header p {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+.preview-image {
+    flex: 1;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f9f9f9;
+}
+
+.preview-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.preview-legend {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    border-radius: 3px;
+}
+
+.legend-label {
+    font-size: 14px;
+    color: #555;
+}
+
+/* Node and link styles for the preview SVG */
+.node-service {
+    fill: #4caf50;
+    stroke: #388e3c;
+    stroke-width: 2px;
+}
+
+.node-topic {
+    fill: #2196f3;
+    stroke: #1976d2;
+    stroke-width: 2px;
+}
+
+.link-produces {
+    stroke: #ff5722;
+    stroke-width: 2px;
+}
+
+.link-consumes {
+    stroke: #9c27b0;
+    stroke-width: 2px;
+}
+
+.node-text {
+    font-size: 12px;
+    fill: #212121;
+    text-anchor: middle;
+    dominant-baseline: middle;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .app-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        max-height: 40vh;
+    }
+    
+    .preview-container {
+        height: auto;
+    }
+}
