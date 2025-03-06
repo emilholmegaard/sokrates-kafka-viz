@@ -8,8 +8,10 @@ class SimpleViz(BaseGenerator):
     """Simple visualization using Mermaid diagram."""
     
     def __init__(self):
+        super().__init__()
         self.name = "Simple HTML"
         self.description = "Basic HTML visualization with Mermaid diagram"
+        self.output_filename = "simple_architecture.html"
         self.nodes = {}  # {node_id: display_name}
         self.edges = []  # List to maintain edge order
         self.schema_nodes = set()  # Track unique schema nodes
@@ -150,7 +152,7 @@ class SimpleViz(BaseGenerator):
             if not file_path.exists():
                 file_path.mkdir(parents=True)
                 
-            output_file = file_path / "simple_architecture.html"
+            output_file = file_path / self.output_filename
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
                 
