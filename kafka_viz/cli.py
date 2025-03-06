@@ -298,20 +298,8 @@ def generate_single_visualization(
     try:
         generator.generate_output(data, vis_dir)
         
-        # Determine the main output file
-        if vis_type == "react":
-            output_file = "index.html"
-        elif vis_type == "mermaid":
-            output_file = "kafka_architecture.html"
-        elif vis_type == "simple":
-            output_file = "simple_architecture.html"
-        else:
-            # Look for any HTML file
-            html_files = list(vis_dir.glob("*.html"))
-            if html_files:
-                output_file = html_files[0].name
-            else:
-                output_file = ""
+        # Get the main output file from the generator
+        output_file = generator.get_main_output_file()
                 
         # Return metadata for this visualization
         return {
@@ -358,20 +346,8 @@ def generate_all_visualizations(
                 # Generate the visualization
                 generator.generate_output(data, vis_dir)
                 
-                # Determine the main output file
-                if vis_type == "react":
-                    output_file = "index.html"
-                elif vis_type == "mermaid":
-                    output_file = "kafka_architecture.html"
-                elif vis_type == "simple":
-                    output_file = "simple_architecture.html"
-                else:
-                    # Look for any HTML file
-                    html_files = list(vis_dir.glob("*.html"))
-                    if html_files:
-                        output_file = html_files[0].name
-                    else:
-                        output_file = ""
+                # Get the main output file from the generator
+                output_file = generator.get_main_output_file()
                 
                 # Add to successful visualizations
                 available_vis = visualization_factory.get_available_generators()
