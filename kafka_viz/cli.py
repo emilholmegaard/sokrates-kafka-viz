@@ -1,3 +1,6 @@
+"""
+Command Line Interface for Kafka-Viz.
+"""
 import json
 import logging
 from pathlib import Path
@@ -9,10 +12,13 @@ from rich.progress import Progress
 from rich.table import Table
 
 from .analyzers.analyzer_manager import AnalyzerManager
-from .visualization.utils import get_available_visualizations, get_generator_by_name
+from .visualization.factory import visualization_factory
 
 app = typer.Typer()
 console = Console()
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def is_source_file(file_path: Path) -> bool:
@@ -82,7 +88,6 @@ def analyze(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler()],
     )
-    logger = logging.getLogger("kafka_viz")
     logger.info(f"Starting analysis of {source_dir}")
     logger.debug(f"Output will be written to {output}")
     logger.debug(f"Include tests: {include_tests}")
@@ -195,10 +200,15 @@ def visualize(
         False, "--list", "-l", help="List available visualization types"
     ),
 ):
-    """Generate visualization from analysis results."""
+    """Generate visualization from analysis results.
     
+    This command generates visual representations of the Kafka communication
+    patterns found in the analysis results. Different visualization types
+    are available, such as interactive React-based visualizations, Mermaid
+    diagrams, and simple HTML outputs.
+    """
     # List available visualizations if requested
-    available_vis = get_available_visualizations()
+    available_vis = visualization_factory.get_available_generators()
     
     if list_visualizations:
         console.print("[bold]Available Visualization Types:[/bold]")
@@ -250,13 +260,11 @@ def visualize(
             data = json.load(f)
 
         # Get the appropriate generator for the selected visualization type
-        generator_class = get_generator_by_name(visualization_type)
-        if not generator_class:
+        generator = visualization_factory.create_generator(visualization_type)
+        if not generator:
             console.print(f"[red]Error: Visualization generator '{visualization_type}' not found.[/red]")
             raise typer.Exit(1)
             
-        generator = generator_class()
-        
         # Generate visualization
         console.print(f"Generating [bold]{available_vis[visualization_type]['name']}[/bold] visualization...")
         
@@ -272,14 +280,19 @@ def visualize(
 
     except Exception as e:
         console.print(f"[red]Error generating visualization: {e}[/red]")
+        logger.exception("Visualization generation failed")
         raise typer.Exit(1)
 
 
 @app.command()
 def info():
-    """Show information about available visualizations."""
+    """Show information about available visualizations and features.
     
-    available_vis = get_available_visualizations()
+    This command displays information about the available visualization
+    types and other features of the Kafka-Viz tool.
+    """
+    
+    available_vis = visualization_factory.get_available_generators()
     
     console.print("[bold]Kafka Visualization Options:[/bold]")
     table = Table(show_header=True, header_style="bold blue")
@@ -295,7 +308,11 @@ def info():
         )
     
     console.print(table)
-    console.print("\nUse [bold]visualize --type TYPE[/bold] to select a specific visualization type.")
+    console.print("\n[bold]Usage:[/bold]")
+    console.print("1. First analyze your codebase with: [cyan]kafka-viz analyze [PATH][/cyan]")
+    console.print("2. Then visualize the results with: [cyan]kafka-viz visualize [RESULTS_FILE][/cyan]")
+    console.print("\nUse [bold]--type TYPE[/bold] to select a specific visualization type.")
+    console.print("Use [bold]--list[/bold] to see all available visualization types.")
 
 
 if __name__ == "__main__":
