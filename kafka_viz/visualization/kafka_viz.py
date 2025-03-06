@@ -12,8 +12,10 @@ class KafkaViz(BaseGenerator):
     """React-based interactive Kafka visualization."""
     
     def __init__(self):
+        super().__init__()
         self.name = "React Interactive"
         self.description = "Interactive D3.js visualization with React UI"
+        self.output_filename = "index.html"
         
     def parse_kafka_data(self, data: dict) -> dict:
         """Parse the JSON file and extract Kafka communication data."""
