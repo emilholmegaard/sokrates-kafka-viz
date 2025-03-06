@@ -8,8 +8,10 @@ class MermaidGenerator(BaseGenerator):
     """Mermaid diagram generator for Kafka visualization."""
     
     def __init__(self):
+        super().__init__()
         self.name = "Mermaid Diagram"
         self.description = "Simple Mermaid.js flowchart diagram"
+        self.output_filename = "kafka_architecture.html"
         self.nodes = {}  # {node_id: display_name}
         self.edges = []  # List to maintain edge order
         self.schema_nodes = set()  # Track unique schema nodes
@@ -55,7 +57,7 @@ class MermaidGenerator(BaseGenerator):
         schema_edges = []
         for service_name, service_info in analysis_result["services"].items():
             service_id = clean_node_id(service_name)
-            for schema_name in service_info.get("schemas", {}).items():
+            for schema_name in service_info.get("schemas", {}).keys():
                 schema_id = f"schema_{clean_node_id(schema_name)}"
                 if schema_id not in schemas:
                     schemas.append(schema_id)
@@ -156,7 +158,7 @@ class MermaidGenerator(BaseGenerator):
             if not file_path.exists():
                 file_path.mkdir(parents=True)
                 
-            output_file = file_path / "kafka_architecture.html"
+            output_file = file_path / self.output_filename
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
                 
