@@ -101,29 +101,33 @@ class MermaidGenerator(BaseGenerator):
         """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
 
-        try:
-            # Try to load template from resources
-            template = load_template("mermaid", "mermaid.html")
-            # Replace placeholders
-            return template.format(diagram_content=mermaid_code)
-        except FileNotFoundError:
-            # Fallback to hardcoded template
-            html_template = """<!DOCTYPE html>
+        # Define a fixed HTML template to avoid issues with loading from file
+        html_template = """<!DOCTYPE html>
 <html>
     <head>
         <meta charset="UTF-8">
         <title>Kafka Service Architecture</title>
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
         <style>
-            .mermaid {{
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+            }
+            .mermaid {
                 width: 100%;
                 height: 100vh;
                 overflow: auto;
                 padding: 20px;
-            }}
+            }
+            h1 {
+                color: #2196F3;
+                margin-bottom: 20px;
+            }
         </style>
     </head>
     <body>
+        <h1>Kafka Service Architecture</h1>
         <pre class="mermaid">
 {diagram_content}
         </pre>
@@ -146,8 +150,8 @@ class MermaidGenerator(BaseGenerator):
     </body>
 </html>"""
 
-            # Double up curly braces in the template for literal curly braces
-            return html_template.format(diagram_content=mermaid_code)
+        # Format the template with the diagram content
+        return html_template.format(diagram_content=mermaid_code)
 
     def generate_output(self, data: dict, file_path: Path) -> None:
         """Generate the visualization output."""
