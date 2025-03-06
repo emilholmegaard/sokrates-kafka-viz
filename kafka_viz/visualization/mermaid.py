@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from .base import BaseGenerator
-from .utils import clean_node_id, format_topic_name, load_template
+from .utils import clean_node_id, format_topic_name, load_template, write_file
 
 
 class MermaidGenerator(BaseGenerator):
@@ -19,155 +19,128 @@ class MermaidGenerator(BaseGenerator):
 
     def generate_diagram(self, analysis_result: dict) -> str:
         """Generate Mermaid diagram with Kafka dependencies."""
-        try:
-            # Change from TB (top to bottom) to LR (left to right) for better space usage
-            lines = ["graph LR"]
+        # Change from TB (top to bottom) to LR (left to right) for better space usage
+        lines = ["graph LR"]
 
-            # Add Services section with explicit positioning
-            lines.append("subgraph Services[Services]")
-            services = []
-            for i, service_name in enumerate(sorted(analysis_result.get("services", {}).keys())):
-                node_id = clean_node_id(service_name)
-                services.append(node_id)
-                # Add positioning hint
-                lines.append(f'    {node_id}["{service_name}"]:::service')
-            lines.append("end")
+        # Add Services section with explicit positioning
+        lines.append("subgraph Services[Services]")
+        services = []
+        for i, service_name in enumerate(sorted(analysis_result["services"].keys())):
+            node_id = clean_node_id(service_name)
+            services.append(node_id)
+            # Add positioning hint
+            lines.append(f'    {node_id}["{service_name}"]:::service')
+        lines.append("end")
 
-            # Add Topics section
-            lines.append("subgraph Topics[Topics]")
-            topics = []
-            topic_edges = []
-            for service_name, service_info in analysis_result.get("services", {}).items():
-                service_id = clean_node_id(service_name)
-                for topic, topic_info in service_info.get("topics", {}).items():
-                    topic_id = f"topic_{clean_node_id(topic)}"
-                    if topic_id not in topics:
-                        topics.append(topic_id)
-                        lines.append(f'    {topic_id}["{format_topic_name(topic)}"]')
+        # Add Topics section
+        lines.append("subgraph Topics[Topics]")
+        topics = []
+        topic_edges = []
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = clean_node_id(service_name)
+            for topic, topic_info in service_info.get("topics", {}).items():
+                topic_id = f"topic_{clean_node_id(topic)}"
+                if topic_id not in topics:
+                    topics.append(topic_id)
+                    lines.append(f'    {topic_id}["{format_topic_name(topic)}"]')
 
-                    # Collect edges but don't add them yet
-                    if service_name in topic_info.get("producers", []):
-                        topic_edges.append(f"{service_id} --> {topic_id}")
-                    if service_name in topic_info.get("consumers", []):
-                        topic_edges.append(f"{topic_id} --> {service_id}")
-            lines.append("end")
+                # Collect edges but don't add them yet
+                if service_name in topic_info.get("producers", []):
+                    topic_edges.append(f"{service_id} --> {topic_id}")
+                if service_name in topic_info.get("consumers", []):
+                    topic_edges.append(f"{topic_id} --> {service_id}")
+        lines.append("end")
 
-            # Add Schemas section
-            lines.append("subgraph Schemas[Schemas]")
-            schemas = []
-            schema_edges = []
-            for service_name, service_info in analysis_result.get("services", {}).items():
-                service_id = clean_node_id(service_name)
-                for schema_name in service_info.get("schemas", {}).keys():
-                    schema_id = f"schema_{clean_node_id(schema_name)}"
-                    if schema_id not in schemas:
-                        schemas.append(schema_id)
-                        lines.append(f'    {schema_id}["{schema_name}"]')
-                    # Collect schema edges
-                    schema_edges.append(f"{service_id} -.-> {schema_id}")
-            lines.append("end")
+        # Add Schemas section
+        lines.append("subgraph Schemas[Schemas]")
+        schemas = []
+        schema_edges = []
+        for service_name, service_info in analysis_result["services"].items():
+            service_id = clean_node_id(service_name)
+            for schema_name in service_info.get("schemas", {}).keys():
+                schema_id = f"schema_{clean_node_id(schema_name)}"
+                if schema_id not in schemas:
+                    schemas.append(schema_id)
+                    lines.append(f'    {schema_id}["{schema_name}"]')
+                # Collect schema edges
+                schema_edges.append(f"{service_id} -.-> {schema_id}")
+        lines.append("end")
 
-            # Add all relationships
-            lines.extend(sorted(set(topic_edges)))
-            lines.extend(sorted(set(schema_edges)))
+        # Add all relationships
+        lines.extend(sorted(set(topic_edges)))
+        lines.extend(sorted(set(schema_edges)))
 
-            # Enhanced styling
-            lines.extend(
-                [
-                    "%% Styling",
-                    "classDef service fill:#f9f,stroke:#333,stroke-width:2px;",
-                    "classDef topic fill:#bbf,stroke:#333,stroke-width:2px;",
-                    "classDef schema fill:#bfb,stroke:#333,stroke-width:2px;",
-                    "classDef default fill:#fff,stroke:#333,stroke-width:1px;",
-                    "%% Layout configuration",
-                    "%%{init: {",
-                    "'flowchart': {",
-                    "'curve': 'monotoneX',",
-                    "'nodeSpacing': 100,",
-                    "'rankSpacing': 100,",
-                    "'ranker': 'tight-tree'",
-                    "},",
-                    "'theme': 'default'",
-                    "} }%%",
-                    "%% Apply styles",
-                    "class Services service;",
-                    "class Topics topic;",
-                    "class Schemas schema;",
-                ]
-            )
+        # Enhanced styling
+        lines.extend(
+            [
+                "%% Styling",
+                "classDef service fill:#f9f,stroke:#333,stroke-width:2px;",
+                "classDef topic fill:#bbf,stroke:#333,stroke-width:2px;",
+                "classDef schema fill:#bfb,stroke:#333,stroke-width:2px;",
+                "classDef default fill:#fff,stroke:#333,stroke-width:1px;",
+                "%% Layout configuration",
+                "%%{init: {",
+                "'flowchart': {",
+                "'curve': 'monotoneX',",
+                "'nodeSpacing': 100,",
+                "'rankSpacing': 100,",
+                "'ranker': 'tight-tree'",
+                "},",
+                "'theme': 'default'",
+                "} }%%",
+                "%% Apply styles",
+                "class Services service;",
+                "class Topics topic;",
+                "class Schemas schema;",
+            ]
+        )
 
-            return "\n".join(lines)
-        except Exception as e:
-            print(f"Error generating Mermaid diagram: {e}")
-            # Return a minimal diagram in case of error
-            return "graph LR\n    A[Error] -->|Could not generate diagram| B[Please check logs]"
+        return "\n".join(lines)
 
     def generate_html(self, data: dict) -> str:
         """Generate HTML with embedded Mermaid diagram."""
-        try:
-            mermaid_code = self.generate_diagram(data)
+        mermaid_code = self.generate_diagram(data)
 
-            # Try to load template from resources
-            try:
-                template = load_template("mermaid", "mermaid.html")
-                # Replace placeholders
-                return template.format(diagram_content=mermaid_code)
-            except Exception as template_error:
-                print(f"Could not load template: {template_error}")
-                # Fallback to hardcoded template
-                html_template = """<!DOCTYPE html>
+        # Fallback template with literal curly braces - no template formatting
+        html_template = """<!DOCTYPE html>
 <html>
     <head>
         <meta charset="UTF-8">
         <title>Kafka Service Architecture</title>
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
         <style>
-            .mermaid {{
+            .mermaid {
                 width: 100%;
                 height: 100vh;
                 overflow: auto;
                 padding: 20px;
-            }}
+            }
         </style>
     </head>
     <body>
         <pre class="mermaid">
-{diagram_content}
+{0}
         </pre>
         <script>
-            mermaid.initialize({{
+            mermaid.initialize({
                 startOnLoad: true,
                 theme: "default",
-                flowchart: {{
+                flowchart: {
                     useMaxWidth: true,
                     htmlLabels: true,
                     curve: "monotoneX",
                     nodeSpacing: 100,
                     rankSpacing: 100,
                     ranker: "tight-tree"
-                }},
+                },
                 securityLevel: "loose",
                 maxTextSize: 90000
-            }});
+            });
         </script>
     </body>
-</html>"""
+</html>""".format(mermaid_code)
 
-                # Double up curly braces in the template for literal curly braces
-                return html_template.format(diagram_content=mermaid_code)
-        except Exception as e:
-            print(f"Error in generate_html: {e}")
-            # Return a simple error page
-            return f"""<!DOCTYPE html>
-<html>
-    <head>
-        <title>Error</title>
-    </head>
-    <body>
-        <h1>Error Generating Mermaid Visualization</h1>
-        <p>An error occurred while generating the Mermaid visualization: {e}</p>
-    </body>
-</html>"""
+        return html_template
 
     def generate_output(self, data: dict, file_path: Path) -> None:
         """Generate the visualization output."""
@@ -185,21 +158,4 @@ class MermaidGenerator(BaseGenerator):
             print(f"Mermaid visualization generated at {output_file}")
         except Exception as e:
             print(f"Error generating Mermaid visualization: {e}")
-            # Create a simple error page
-            error_html = f"""<!DOCTYPE html>
-<html>
-    <head>
-        <title>Error</title>
-    </head>
-    <body>
-        <h1>Error Generating Mermaid Visualization</h1>
-        <p>An error occurred while generating the Mermaid visualization: {e}</p>
-    </body>
-</html>"""
-            
-            output_file = file_path / self.output_filename
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(error_html)
-                
-            print(f"Error page generated at {output_file}")
             raise
