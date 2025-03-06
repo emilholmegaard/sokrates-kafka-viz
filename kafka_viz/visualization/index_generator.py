@@ -4,7 +4,7 @@ Generator for the index page that links to all visualizations.
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from .base import BaseGenerator
 from .utils import load_template, write_file
@@ -100,7 +100,7 @@ class IndexGenerator(BaseGenerator):
 </body>
 </html>"""
             
-    def generate_output(self, data: Dict[str, Any], output_dir: Path, vis_links: List[Dict[str, Any]] = None) -> None:
+    def generate_output(self, data: Dict[str, Any], output_dir: Path, vis_links: Optional[List[Dict[str, Any]]] = None) -> None:
         """Generate the index page in the output directory.
         
         Args:
