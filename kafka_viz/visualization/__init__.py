@@ -10,6 +10,7 @@ from .factory import visualization_factory
 from .kafka_viz import KafkaViz
 from .mermaid import MermaidGenerator
 from .simple_viz import SimpleViz
+from .index_generator import IndexGenerator
 
 __all__ = [
     'BaseGenerator',
@@ -17,4 +18,5 @@ __all__ = [
     'KafkaViz',
     'MermaidGenerator',
     'SimpleViz',
+    'IndexGenerator',
 ]
