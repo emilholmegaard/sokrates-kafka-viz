@@ -1,15 +1,17 @@
 from typing import Dict, List, Optional, Set
+from pathlib import Path
 
 from .base import BaseGenerator
 
 
 class ArchitectureVisualizer(BaseGenerator):
+    """Architecture visualization using Mermaid."""
+    
     def __init__(self) -> None:
-        """
-        Initialize the visualizer with architecture data
-
-        :param data: Dictionary containing architecture information
-        """
+        super().__init__()
+        self.name = "Architecture Diagram"
+        self.description = "Service and schema architecture diagram"
+        self.output_filename = "architecture.html"
         self.data: Dict = {}
         self.services: List[str] = []
         self.schemas: List[str] = []
@@ -125,16 +127,18 @@ class ArchitectureVisualizer(BaseGenerator):
         )
 
         # Apply classes
-        lines.append(
-            f"    class {' '.join(self._clean_node_id(s) for s in services)} service"
-        )
-        lines.append(
-            f"    class {' '.join(f'schema_{self._clean_node_id(s)}' for s in schemas)} schema"
-        )
+        if services:
+            lines.append(
+                f"    class {' '.join(self._clean_node_id(s) for s in services)} service"
+            )
+        if schemas:
+            lines.append(
+                f"    class {' '.join(f'schema_{self._clean_node_id(s)}' for s in schemas)} schema"
+            )
 
         return "\n".join(lines)
 
-    def __generate_html__(
+    def _generate_html_content(
         self,
         custom_services: Optional[List[str]] = None,
         custom_schemas: Optional[List[str]] = None,
@@ -152,22 +156,36 @@ class ArchitectureVisualizer(BaseGenerator):
             custom_services, custom_schemas, custom_relationships
         )
 
-        html_template = f"""
-        <!DOCTYPE html>
-        <html>
-            <head>
-            <meta charset="UTF-8">
-            <title>Kafka Service Architecture</title>
-            <script src='https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js'></script>
-            <style>
-                .mermaid {{
+        html_template = """<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Kafka Service Architecture</title>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+            }
+            .mermaid {
                 width: 100%;
-                height: 100%;
+                height: 100vh;
                 overflow: auto;
-                }}
-            </style>
-            <script>
-                mermaid.initialize({{
+            }
+            h1 {
+                color: #2196F3;
+                margin-bottom: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Kafka Service Architecture</h1>
+        <div class="mermaid">
+{diagram_content}
+        </div>
+        <script>
+            mermaid.initialize({{
                 startOnLoad: true,
                 theme: 'default',
                 flowchart: {{
@@ -177,28 +195,49 @@ class ArchitectureVisualizer(BaseGenerator):
                 }},
                 securityLevel: 'loose',
                 maxTextSize: 90000
-                }});
-            </script>
-            </head>
-            <body>
-            <div class="mermaid">
-                {mermaid_code}
-            </div>
-            </body>
-        </html>
-        """
+            }});
+        </script>
+    </body>
+</html>"""
 
-        return html_template
+        return html_template.format(diagram_content=mermaid_code)
 
     def generate_html(self, data: Dict) -> str:
-
+        """Generate HTML for the visualization."""
         self.data = data
         self.services = self._extract_services()
         self.schemas = self._extract_schemas()
         self.schema_relationships = self._extract_schema_relationships()
 
-        html_output = self.__generate_html__(
+        html_output = self._generate_html_content(
             self.services, self.schemas, self.schema_relationships
         )
 
         return html_output
+        
+    def generate_output(self, data: Dict, file_path: Path) -> None:
+        """Generate the visualization output files."""
+        self.data = data
+        self.services = self._extract_services()
+        self.schemas = self._extract_schemas()
+        self.schema_relationships = self._extract_schema_relationships()
+        
+        try:
+            # Generate HTML
+            html_content = self._generate_html_content(
+                self.services, self.schemas, self.schema_relationships
+            )
+            
+            # Ensure directory exists
+            if not file_path.exists():
+                file_path.mkdir(parents=True)
+                
+            # Write output file
+            output_file = file_path / self.output_filename
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(html_content)
+                
+            print(f"Architecture visualization generated at {output_file}")
+        except Exception as e:
+            print(f"Error generating architecture visualization: {e}")
+            raise
