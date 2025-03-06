@@ -1,7 +1,7 @@
 # base.py
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 class BaseGenerator(ABC):
@@ -14,11 +14,13 @@ class BaseGenerator(ABC):
     Attributes:
         name (str): Display name of the visualization
         description (str): Description of the visualization
+        output_filename (str): Name of the main output file
     """
     
     def __init__(self):
         self.name = "Base Visualization"
         self.description = "Abstract base class for visualizations"
+        self.output_filename = "index.html"  # Default output filename
     
     @abstractmethod
     def generate_html(self, data: Dict[str, Any]) -> str:
@@ -50,5 +52,14 @@ class BaseGenerator(ABC):
         """
         return {
             "name": getattr(self, "name", "Unknown"),
-            "description": getattr(self, "description", "No description available")
+            "description": getattr(self, "description", "No description available"),
+            "output_filename": getattr(self, "output_filename", "index.html")
         }
+    
+    def get_main_output_file(self) -> str:
+        """Get the name of the main output file for this visualization.
+        
+        Returns:
+            str: Name of the main output file
+        """
+        return getattr(self, "output_filename", "index.html")
