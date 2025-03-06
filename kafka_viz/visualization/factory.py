@@ -12,6 +12,7 @@ from .kafka_viz import KafkaViz
 from .mermaid import MermaidGenerator
 from .simple_viz import SimpleViz
 from .index_generator import IndexGenerator
+from .architecture_viz import ArchitectureVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class VisualizationFactory:
             "react": KafkaViz,
             "mermaid": MermaidGenerator,
             "simple": SimpleViz,
+            "architecture": ArchitectureVisualizer,
             "index": IndexGenerator
         }
         self._config = self._load_config()
@@ -63,6 +65,11 @@ class VisualizationFactory:
                 "simple": {
                     "name": "Simple HTML",
                     "description": "Basic HTML visualization",
+                    "enabled": True
+                },
+                "architecture": {
+                    "name": "Architecture Diagram",
+                    "description": "Service and schema architecture diagram",
                     "enabled": True
                 },
                 "index": {
