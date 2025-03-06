@@ -11,6 +11,7 @@ from .base import BaseGenerator
 from .kafka_viz import KafkaViz
 from .mermaid import MermaidGenerator
 from .simple_viz import SimpleViz
+from .index_generator import IndexGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class VisualizationFactory:
         self._generators: Dict[str, Type[BaseGenerator]] = {
             "react": KafkaViz,
             "mermaid": MermaidGenerator,
-            "simple": SimpleViz
+            "simple": SimpleViz,
+            "index": IndexGenerator
         }
         self._config = self._load_config()
         
@@ -62,6 +64,11 @@ class VisualizationFactory:
                     "name": "Simple HTML",
                     "description": "Basic HTML visualization",
                     "enabled": True
+                },
+                "index": {
+                    "name": "Visualization Index",
+                    "description": "Entry point linking to all visualizations",
+                    "enabled": True
                 }
             }
         }
@@ -93,7 +100,7 @@ class VisualizationFactory:
         """
         available = {}
         for id, metadata in self._config["visualizations"].items():
-            if metadata.get("enabled", True) and id in self._generators:
+            if metadata.get("enabled", True) and id in self._generators and id != "index":
                 available[id] = metadata
         return available
     
@@ -107,7 +114,7 @@ class VisualizationFactory:
             BaseGenerator: Instantiated generator or None if not found
         """
         # Check if the generator is available and enabled
-        available = self.get_available_generators()
+        available = self.get_all_generators()
         if name not in available:
             return None
             
@@ -117,6 +124,39 @@ class VisualizationFactory:
             return None
             
         return generator_class()
+    
+    def get_all_generators(self) -> Dict[str, Dict[str, Any]]:
+        """Get all registered visualization generators, including internal ones.
+        
+        Returns:
+            dict: Mapping of generator IDs to metadata
+        """
+        available = {}
+        for id, metadata in self._config["visualizations"].items():
+            if metadata.get("enabled", True) and id in self._generators:
+                available[id] = metadata
+        return available
+    
+    def create_all_generators(self, exclude: List[str] = None) -> Dict[str, BaseGenerator]:
+        """Create instances of all available visualization generators.
+        
+        Args:
+            exclude: List of generator IDs to exclude
+            
+        Returns:
+            dict: Mapping of generator IDs to instantiated generators
+        """
+        if exclude is None:
+            exclude = []
+            
+        generators = {}
+        for id, metadata in self.get_available_generators().items():
+            if id not in exclude:
+                generator = self.create_generator(id)
+                if generator:
+                    generators[id] = generator
+                    
+        return generators
 
 
 # Singleton instance for use throughout the application
