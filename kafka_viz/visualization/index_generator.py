@@ -21,6 +21,7 @@ class IndexGenerator(BaseGenerator):
         super().__init__()
         self.name = "Visualization Index"
         self.description = "Entry point linking to all visualizations"
+        self.output_filename = "index.html"
         
     def generate_html(self, data: Dict[str, Any], vis_links: List[Dict[str, Any]]) -> str:
         """Generate the HTML for the index page.
@@ -118,7 +119,7 @@ class IndexGenerator(BaseGenerator):
                 
             # Generate HTML
             html = self.generate_html(data, vis_links)
-            write_file(output_dir, "index.html", html)
+            write_file(output_dir, self.output_filename, html)
             
             # Copy CSS file
             try:
@@ -127,7 +128,7 @@ class IndexGenerator(BaseGenerator):
             except Exception as e:
                 print(f"Warning: Could not copy CSS file: {e}")
                 
-            print(f"Index page generated at {output_dir / 'index.html'}")
+            print(f"Index page generated at {output_dir / self.output_filename}")
             
         except Exception as e:
             print(f"Error generating index page: {e}")
