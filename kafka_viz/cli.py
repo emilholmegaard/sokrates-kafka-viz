@@ -232,40 +232,6 @@ def display_visualization_types(available_vis: Dict[str, Dict[str, Any]]) -> Non
     console.print(table)
 
 
-def select_visualization_type(available_vis: Dict[str, Dict[str, Any]]) -> str:
-    """Interactively select a visualization type.
-    
-    Args:
-        available_vis: Available visualization types
-        
-    Returns:
-        str: Selected visualization type ID
-    """
-    options = list(available_vis.keys())
-    if not options:
-        console.print("[red]No visualization types available.")
-        raise typer.Exit(1)
-    
-    console.print("[bold]Select visualization type:[/bold]")
-    console.print("[0] All visualizations (generates all available types)")
-    for i, vis_id in enumerate(options):
-        console.print(f"[{i+1}] {available_vis[vis_id]['name']} - {available_vis[vis_id]['description']}")
-    
-    choice = -1
-    while choice < 0 or choice > len(options):
-        try:
-            choice = int(typer.prompt("Enter number", default="0"))
-            if choice < 0 or choice > len(options):
-                console.print(f"[red]Please enter a number between 0 and {len(options)}[/red]")
-        except ValueError:
-            console.print("[red]Please enter a valid number[/red]")
-    
-    if choice == 0:
-        return "all"
-    else:
-        return options[choice - 1]
-
-
 def generate_single_visualization(
     data: Dict[str, Any],
     vis_type: str,
@@ -470,9 +436,9 @@ def visualize(
     if all_visualizations or visualization_type == "all":
         visualization_type = "all"
     
-    # Select visualization type interactively if not specified
+    # If no visualization type specified, default to "all" (no interactive selection)
     if not visualization_type:
-        visualization_type = select_visualization_type(available_vis)
+        visualization_type = "all"
 
     try:
         # Load analysis results
