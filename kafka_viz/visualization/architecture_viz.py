@@ -1,232 +1,164 @@
-from typing import Dict, List, Optional, Set
 from pathlib import Path
-
 from .base import BaseGenerator
 
 
 class ArchitectureVisualizer(BaseGenerator):
-    """Architecture visualization using Mermaid."""
+    """Visualization generator for architecture diagrams."""
     
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
-        self.name = "Architecture Diagram"
-        self.description = "Service and schema architecture diagram"
+        self.name = "Architecture Visualization"
+        self.description = "Visualization of system architecture"
         self.output_filename = "architecture.html"
-        self.data: Dict = {}
-        self.services: List[str] = []
-        self.schemas: List[str] = []
-        self.schema_relationships: Dict[str, List[str]] = {}
-
-    def _extract_services(self) -> List[str]:
-        """
-        Extract services from the architecture data
-
-        :return: Sorted list of service names
-        """
-        services = set(self.data.get("services", {}).keys())
-        return sorted(services)
-
-    def _extract_schemas(self) -> List[str]:
-        """
-        Extract unique schemas from services
-
-        :return: Sorted list of schema names
-        """
-        schemas: Set[str] = set()
-        for service_info in self.data.get("services", {}).values():
-            schemas.update(service_info.get("schemas", {}).keys())
-        return sorted(schemas)
-
-    def _extract_schema_relationships(self) -> Dict[str, List[str]]:
-        """
-        Extract schema relationships for services
-
-        :return: Dictionary of service to schemas mappings
-        """
-        relationships = {}
-        for service_name, service_info in self.data.get("services", {}).items():
-            service_schemas = list(service_info.get("schemas", {}).keys())
-            if service_schemas:
-                relationships[service_name] = service_schemas
-        return relationships
-
-    def _clean_node_id(self, name: str) -> str:
-        """
-        Create a clean, CSS-friendly node ID
-
-        :param name: Original name
-        :return: Cleaned node ID
-        """
-        replacements = {
-            "-": "_",
-            ".": "_",
-            "#": "hash",
-            "@": "at",
-            " ": "_",
-            ":": "_",
-            "/": "_",
-            "\\": "_",
-            "${": "",
-            "}": "",
-        }
-        result = name
-        for old, new in replacements.items():
-            result = result.replace(old, new)
-        return result
-
-    def generate_mermaid_diagram(
-        self,
-        custom_services: Optional[List[str]] = None,
-        custom_schemas: Optional[List[str]] = None,
-        custom_relationships: Optional[Dict[str, List[str]]] = None,
-    ) -> str:
-        """
-        Generate Mermaid diagram with architecture dependencies
-
-        :param custom_services: Optional custom list of services
-        :param custom_schemas: Optional custom list of schemas
-        :param custom_relationships: Optional custom schema relationships
-        :return: Mermaid diagram as a string
-        """
-        # Use custom or extracted data
-        services = custom_services or self.services
-        schemas = custom_schemas or self.schemas
-        relationships = custom_relationships or self.schema_relationships
-
-        lines = ["graph TB"]
-
-        # Add Services section
-        lines.append("    subgraph Services")
-        for service_name in services:
-            node_id = self._clean_node_id(service_name)
-            lines.append(f'        {node_id}["{service_name}"]')
-        lines.append("    end")
-
-        # Add Schemas section
-        lines.append("    subgraph Schemas")
-        for schema_name in schemas:
-            schema_id = f"schema_{self._clean_node_id(schema_name)}"
-            lines.append(f'        {schema_id}["{schema_name}"]')
-        lines.append("    end")
-
-        # Add Schema Relationships
-        for service, service_schemas in relationships.items():
-            service_id = self._clean_node_id(service)
-            for schema_name in service_schemas:
-                schema_id = f"schema_{self._clean_node_id(schema_name)}"
-                lines.append(f"    {service_id} -.-> {schema_id}")
-
-        # Add Styling
-        lines.extend(
-            [
-                "    %% Styling",
-                "    classDef service fill:#f9f,stroke:#333,stroke-width:2px",
-                "    classDef topic fill:#bbf,stroke:#333,stroke-width:2px",
-                "    classDef schema fill:#bfb,stroke:#333,stroke-width:2px",
-            ]
-        )
-
-        # Apply classes
-        if services:
-            lines.append(
-                f"    class {' '.join(self._clean_node_id(s) for s in services)} service"
-            )
-        if schemas:
-            lines.append(
-                f"    class {' '.join(f'schema_{self._clean_node_id(s)}' for s in schemas)} schema"
-            )
-
-        return "\n".join(lines)
-
-    def _generate_html_content(
-        self,
-        custom_services: Optional[List[str]] = None,
-        custom_schemas: Optional[List[str]] = None,
-        custom_relationships: Optional[Dict[str, List[str]]] = None,
-    ) -> str:
-        """
-        Generate HTML with embedded Mermaid diagram
-
-        :param custom_services: Optional custom list of services
-        :param custom_schemas: Optional custom list of schemas
-        :param custom_relationships: Optional custom schema relationships
-        :return: HTML string with Mermaid diagram
-        """
-        mermaid_code = self.generate_mermaid_diagram(
-            custom_services, custom_schemas, custom_relationships
-        )
-
-        html_template = """<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Kafka Service Architecture</title>
-        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-            }
-            .mermaid {
-                width: 100%;
-                height: 100vh;
-                overflow: auto;
-            }
-            h1 {
-                color: #2196F3;
-                margin-bottom: 20px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Kafka Service Architecture</h1>
-        <div class="mermaid">
-{diagram_content}
-        </div>
-        <script>
-            mermaid.initialize({{
-                startOnLoad: true,
-                theme: 'default',
-                flowchart: {{
-                    useMaxWidth: true,
-                    htmlLabels: true,
-                    curve: 'basis'
-                }},
-                securityLevel: 'loose',
-                maxTextSize: 90000
-            }});
-        </script>
-    </body>
-</html>"""
-
-        return html_template.format(diagram_content=mermaid_code)
-
-    def generate_html(self, data: Dict) -> str:
+    
+    def generate_html(self, data: dict) -> str:
         """Generate HTML for the visualization."""
-        self.data = data
-        self.services = self._extract_services()
-        self.schemas = self._extract_schemas()
-        self.schema_relationships = self._extract_schema_relationships()
-
-        html_output = self._generate_html_content(
-            self.services, self.schemas, self.schema_relationships
-        )
-
-        return html_output
+        html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .service {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .service h2 {
+            margin-top: 0;
+            color: #2196F3;
+        }
+        .service-detail {
+            margin-bottom: 10px;
+        }
+        .topics, .schemas {
+            margin-top: 15px;
+        }
+        .topic-item, .schema-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .topic-name, .schema-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .producers, .consumers {
+            margin-top: 5px;
+            color: #666;
+        }
+        .schema-type {
+            color: #888;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kafka Architecture Visualization</h1>
+"""
         
-    def generate_output(self, data: Dict, file_path: Path) -> None:
-        """Generate the visualization output files."""
-        self.data = data
-        self.services = self._extract_services()
-        self.schemas = self._extract_schemas()
-        self.schema_relationships = self._extract_schema_relationships()
+        # Add services
+        for service_name, service_data in data.get("services", {}).items():
+            html += f"""
+        <div class="service">
+            <h2>{service_name}</h2>
+            <div class="service-detail">
+                <strong>Language:</strong> {service_data.get("language", "Unknown")}
+            </div>
+            
+            <div class="topics">
+                <h3>Topics</h3>
+"""
+            
+            # Add topics for this service
+            has_topics = False
+            for topic_name, topic_info in service_data.get("topics", {}).items():
+                has_topics = True
+                producers = ", ".join(topic_info.get("producers", []))
+                consumers = ", ".join(topic_info.get("consumers", []))
+                
+                html += f"""
+                <div class="topic-item">
+                    <div class="topic-name">{topic_name}</div>
+                    <div class="producers">Producers: {producers or "None"}</div>
+                    <div class="consumers">Consumers: {consumers or "None"}</div>
+                </div>
+"""
+            
+            if not has_topics:
+                html += """
+                <p>No topics defined for this service.</p>
+"""
+            
+            html += """
+            </div>
+            
+            <div class="schemas">
+                <h3>Schemas</h3>
+"""
+            
+            # Add schemas for this service
+            has_schemas = False
+            for schema_name, schema_info in service_data.get("schemas", {}).items():
+                has_schemas = True
+                schema_type = schema_info.get("type", "unknown")
+                namespace = schema_info.get("namespace", "")
+                
+                html += f"""
+                <div class="schema-item">
+                    <div class="schema-name">{schema_name}</div>
+                    <div class="schema-type">Type: {schema_type}</div>
+                    <div class="schema-namespace">Namespace: {namespace}</div>
+                </div>
+"""
+            
+            if not has_schemas:
+                html += """
+                <p>No schemas defined for this service.</p>
+"""
+            
+            html += """
+            </div>
+        </div>
+"""
         
+        html += """
+    </div>
+</body>
+</html>
+"""
+        
+        return html
+    
+    def generate_output(self, data: dict, file_path: Path) -> None:
+        """Generate the visualization output."""
         try:
-            # Generate HTML
-            html_content = self._generate_html_content(
-                self.services, self.schemas, self.schema_relationships
-            )
+            html_content = self.generate_html(data)
             
             # Ensure directory exists
             if not file_path.exists():
