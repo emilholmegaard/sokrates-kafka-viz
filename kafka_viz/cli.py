@@ -6,6 +6,7 @@ in a microservices architecture and generating visualizations.
 """
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set, Tuple
 
@@ -16,6 +17,7 @@ from rich.table import Table
 
 from .analyzers.analyzer_manager import AnalyzerManager
 from .visualization.factory import visualization_factory
+from .visualization.index_generator import IndexGenerator
 
 # Initialize Typer app and console
 app = typer.Typer()
@@ -245,19 +247,152 @@ def select_visualization_type(available_vis: Dict[str, Dict[str, Any]]) -> str:
         raise typer.Exit(1)
     
     console.print("[bold]Select visualization type:[/bold]")
+    console.print("[0] All visualizations (generates all available types)")
     for i, vis_id in enumerate(options):
         console.print(f"[{i+1}] {available_vis[vis_id]['name']} - {available_vis[vis_id]['description']}")
     
-    choice = 0
-    while choice < 1 or choice > len(options):
+    choice = -1
+    while choice < 0 or choice > len(options):
         try:
-            choice = int(typer.prompt("Enter number", default="1"))
-            if choice < 1 or choice > len(options):
-                console.print(f"[red]Please enter a number between 1 and {len(options)}[/red]")
+            choice = int(typer.prompt("Enter number", default="0"))
+            if choice < 0 or choice > len(options):
+                console.print(f"[red]Please enter a number between 0 and {len(options)}[/red]")
         except ValueError:
             console.print("[red]Please enter a valid number[/red]")
     
-    return options[choice - 1]
+    if choice == 0:
+        return "all"
+    else:
+        return options[choice - 1]
+
+
+def generate_single_visualization(
+    data: Dict[str, Any],
+    vis_type: str,
+    output_dir: Path
+) -> Optional[Dict[str, Any]]:
+    """Generate a single visualization.
+    
+    Args:
+        data: Analysis data
+        vis_type: Visualization type
+        output_dir: Output directory
+        
+    Returns:
+        Optional[Dict[str, Any]]: Visualization metadata if successful
+    """
+    # Get the generator for the selected visualization type
+    available_vis = visualization_factory.get_available_generators()
+    generator = visualization_factory.create_generator(vis_type)
+    
+    if not generator:
+        console.print(f"[red]Error: Visualization generator '{vis_type}' not found.[/red]")
+        return None
+        
+    # Create subdirectory for this visualization
+    vis_dir = output_dir / vis_type
+    if not vis_dir.exists():
+        vis_dir.mkdir(parents=True)
+        
+    # Generate output
+    try:
+        generator.generate_output(data, vis_dir)
+        
+        # Determine the main output file
+        if vis_type == "react":
+            output_file = "index.html"
+        elif vis_type == "mermaid":
+            output_file = "kafka_architecture.html"
+        elif vis_type == "simple":
+            output_file = "simple_architecture.html"
+        else:
+            # Look for any HTML file
+            html_files = list(vis_dir.glob("*.html"))
+            if html_files:
+                output_file = html_files[0].name
+            else:
+                output_file = ""
+                
+        # Return metadata for this visualization
+        return {
+            "name": available_vis[vis_type]["name"],
+            "description": available_vis[vis_type]["description"],
+            "path": f"{vis_type}/{output_file}",
+            "type": vis_type
+        }
+    except Exception as e:
+        logger.error(f"Error generating {vis_type} visualization: {e}")
+        return None
+
+
+def generate_all_visualizations(
+    data: Dict[str, Any],
+    output_dir: Path
+) -> None:
+    """Generate all available visualizations.
+    
+    Args:
+        data: Analysis data
+        output_dir: Output directory
+    """
+    # Get all available generators
+    generators = visualization_factory.create_all_generators()
+    
+    # Track successful visualizations for the index
+    vis_links = []
+    
+    with Progress() as progress:
+        # Create a task for each visualization type
+        task = progress.add_task("Generating visualizations...", total=len(generators))
+        
+        # Generate each visualization
+        for vis_type, generator in generators.items():
+            progress.update(task, description=f"Generating {vis_type} visualization...")
+            
+            try:
+                # Create subdirectory for this visualization
+                vis_dir = output_dir / vis_type
+                if not vis_dir.exists():
+                    vis_dir.mkdir(parents=True)
+                    
+                # Generate the visualization
+                generator.generate_output(data, vis_dir)
+                
+                # Determine the main output file
+                if vis_type == "react":
+                    output_file = "index.html"
+                elif vis_type == "mermaid":
+                    output_file = "kafka_architecture.html"
+                elif vis_type == "simple":
+                    output_file = "simple_architecture.html"
+                else:
+                    # Look for any HTML file
+                    html_files = list(vis_dir.glob("*.html"))
+                    if html_files:
+                        output_file = html_files[0].name
+                    else:
+                        output_file = ""
+                
+                # Add to successful visualizations
+                available_vis = visualization_factory.get_available_generators()
+                vis_links.append({
+                    "name": available_vis[vis_type]["name"],
+                    "description": available_vis[vis_type]["description"],
+                    "path": f"{vis_type}/{output_file}",
+                    "type": vis_type
+                })
+                
+                progress.update(task, advance=1)
+                
+            except Exception as e:
+                logger.error(f"Error generating {vis_type} visualization: {e}")
+                progress.update(task, advance=1)
+    
+    # Generate the index page
+    if vis_links:
+        console.print("Generating index page...")
+        index_generator = IndexGenerator()
+        index_generator.generate_output(data, output_dir, vis_links)
 
 
 @app.command()
@@ -326,10 +461,13 @@ def visualize(
         "kafka_visualization", help="Output directory for visualization"
     ),
     visualization_type: Optional[str] = typer.Option(
-        None, "--type", "-t", help="Type of visualization to generate"
+        None, "--type", "-t", help="Type of visualization to generate (or 'all' for all types)"
     ),
     list_visualizations: bool = typer.Option(
         False, "--list", "-l", help="List available visualization types"
+    ),
+    all_visualizations: bool = typer.Option(
+        False, "--all", "-a", help="Generate all visualization types"
     ),
 ):
     """Generate visualization from analysis results.
@@ -338,6 +476,8 @@ def visualize(
     patterns found in the analysis results. Different visualization types
     are available, such as interactive React-based visualizations, Mermaid
     diagrams, and simple HTML outputs.
+    
+    By default, it generates all available visualization types with an index page.
     """
     # Set up logging
     setup_logging(False)
@@ -350,37 +490,45 @@ def visualize(
         display_visualization_types(available_vis)
         return
 
+    # Check if we should generate all visualizations
+    if all_visualizations or visualization_type == "all":
+        visualization_type = "all"
+    
     # Select visualization type interactively if not specified
     if not visualization_type:
         visualization_type = select_visualization_type(available_vis)
 
-    # Check if the specified visualization type exists
-    if visualization_type not in available_vis:
-        console.print(f"[red]Error: Visualization type '{visualization_type}' not found. Use --list to see available types.[/red]")
-        raise typer.Exit(1)
-
     try:
         # Load analysis results
         data = load_analysis_data(input_file)
-
-        # Get the appropriate generator for the selected visualization type
-        generator = visualization_factory.create_generator(visualization_type)
-        if not generator:
-            console.print(f"[red]Error: Visualization generator '{visualization_type}' not found.[/red]")
-            raise typer.Exit(1)
-            
-        # Generate visualization
-        console.print(f"Generating [bold]{available_vis[visualization_type]['name']}[/bold] visualization...")
         
-        # Create output directory
-        output_dir = Path(output)
-        if not output_dir.exists():
-            output_dir.mkdir(parents=True)
+        # Create base output directory
+        if not output.exists():
+            output.mkdir(parents=True)
             
-        # Generate output
-        generator.generate_output(data, output_dir)
-        
-        console.print(f"[green]Visualization generated at {output_dir}[/green]")
+        # Generate visualizations
+        if visualization_type == "all":
+            # Generate all visualization types
+            console.print("[bold]Generating all visualization types...[/bold]")
+            generate_all_visualizations(data, output)
+            console.print(f"[green]All visualizations generated at {output}[/green]")
+            console.print(f"[green]Open {output}/index.html to access the visualizations[/green]")
+        else:
+            # Generate a single visualization type
+            if visualization_type not in available_vis:
+                console.print(f"[red]Error: Visualization type '{visualization_type}' not found. Use --list to see available types.[/red]")
+                raise typer.Exit(1)
+                
+            console.print(f"Generating [bold]{available_vis[visualization_type]['name']}[/bold] visualization...")
+            result = generate_single_visualization(data, visualization_type, output)
+            
+            if result:
+                vis_dir = output / visualization_type
+                console.print(f"[green]Visualization generated at {vis_dir}[/green]")
+                console.print(f"[green]Open {vis_dir}/{result['path'].split('/')[-1]} to view the visualization[/green]")
+            else:
+                console.print("[red]Failed to generate visualization.[/red]")
+                raise typer.Exit(1)
 
     except Exception as e:
         console.print(f"[red]Error generating visualization: {e}[/red]")
@@ -416,7 +564,9 @@ def info():
     console.print("\n[bold]Usage:[/bold]")
     console.print("1. First analyze your codebase with: [cyan]kafka-viz analyze [PATH][/cyan]")
     console.print("2. Then visualize the results with: [cyan]kafka-viz visualize [RESULTS_FILE][/cyan]")
-    console.print("\nUse [bold]--type TYPE[/bold] to select a specific visualization type.")
+    console.print("\nBy default, all visualization types will be generated with an index page.")
+    console.print("Use [bold]--type TYPE[/bold] to select a specific visualization type.")
+    console.print("Use [bold]--all[/bold] or [bold]--type all[/bold] to explicitly generate all types.")
     console.print("Use [bold]--list[/bold] to see all available visualization types.")
 
 
