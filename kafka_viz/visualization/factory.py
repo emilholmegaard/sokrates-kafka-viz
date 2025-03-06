@@ -11,8 +11,8 @@ from .base import BaseGenerator
 from .kafka_viz import KafkaViz
 from .mermaid import MermaidGenerator
 from .simple_viz import SimpleViz
-from .index_generator import IndexGenerator
 from .architecture_viz import ArchitectureVisualizer
+from .index_generator import IndexGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,8 @@ class VisualizationFactory:
                     "enabled": True
                 },
                 "architecture": {
-                    "name": "Architecture Diagram",
-                    "description": "Service and schema architecture diagram",
+                    "name": "Architecture Visualization",
+                    "description": "Visualization of system architecture",
                     "enabled": True
                 },
                 "index": {
