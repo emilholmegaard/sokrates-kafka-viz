@@ -22,76 +22,78 @@ class MermaidGenerator(BaseGenerator):
         # Change from TB (top to bottom) to LR (left to right) for better space usage
         lines = ["graph LR"]
 
-        # Add Services section
-        lines.append("  subgraph Services")
+        # Add Services section with explicit positioning
+        lines.append("subgraph Services[Services]")
         services = []
-        for service_name in sorted(analysis_result["services"].keys()):
-            # Remove any special characters that might cause syntax issues
-            node_id = f"service_{clean_node_id(service_name)}"
+        for i, service_name in enumerate(sorted(analysis_result["services"].keys())):
+            node_id = clean_node_id(service_name)
             services.append(node_id)
-            # Make sure quotes are properly escaped for node labels
-            lines.append(f'    {node_id}["{service_name}"]')
-        lines.append("  end")
+            # Add positioning hint
+            lines.append(f'    {node_id}["{service_name}"]:::service')
+        lines.append("end")
 
         # Add Topics section
-        lines.append("  subgraph Topics")
+        lines.append("subgraph Topics[Topics]")
         topics = []
         topic_edges = []
         for service_name, service_info in analysis_result["services"].items():
-            service_id = f"service_{clean_node_id(service_name)}"
+            service_id = clean_node_id(service_name)
             for topic, topic_info in service_info.get("topics", {}).items():
                 topic_id = f"topic_{clean_node_id(topic)}"
                 if topic_id not in topics:
                     topics.append(topic_id)
-                    # Make sure quotes are properly escaped for node labels
-                    display_name = format_topic_name(topic).replace('"', '\\"')
-                    lines.append(f'    {topic_id}["{display_name}"]')
+                    lines.append(f'    {topic_id}["{format_topic_name(topic)}"]')
 
                 # Collect edges but don't add them yet
                 if service_name in topic_info.get("producers", []):
-                    topic_edges.append(f"  {service_id} --> {topic_id}")
+                    topic_edges.append(f"{service_id} --> {topic_id}")
                 if service_name in topic_info.get("consumers", []):
-                    topic_edges.append(f"  {topic_id} --> {service_id}")
-        lines.append("  end")
+                    topic_edges.append(f"{topic_id} --> {service_id}")
+        lines.append("end")
 
-        # Add Schemas section if there are any schemas
+        # Add Schemas section
+        lines.append("subgraph Schemas[Schemas]")
         schemas = []
         schema_edges = []
-        has_schemas = False
-        
         for service_name, service_info in analysis_result["services"].items():
-            if service_info.get("schemas"):
-                has_schemas = True
-                break
-                
-        if has_schemas:
-            lines.append("  subgraph Schemas")
-            for service_name, service_info in analysis_result["services"].items():
-                service_id = f"service_{clean_node_id(service_name)}"
-                for schema_name in service_info.get("schemas", {}).keys():
-                    schema_id = f"schema_{clean_node_id(schema_name)}"
-                    if schema_id not in schemas:
-                        schemas.append(schema_id)
-                        schema_display = schema_name.replace('"', '\\"')
-                        lines.append(f'    {schema_id}["{schema_display}"]')
-                    # Collect schema edges
-                    schema_edges.append(f"  {service_id} -.-> {schema_id}")
-            lines.append("  end")
+            service_id = clean_node_id(service_name)
+            for schema_name in service_info.get("schemas", {}).keys():
+                schema_id = f"schema_{clean_node_id(schema_name)}"
+                if schema_id not in schemas:
+                    schemas.append(schema_id)
+                    lines.append(f'    {schema_id}["{schema_name}"]')
+                # Collect schema edges
+                schema_edges.append(f"{service_id} -.-> {schema_id}")
+        lines.append("end")
 
         # Add all relationships
         lines.extend(sorted(set(topic_edges)))
         lines.extend(sorted(set(schema_edges)))
 
-        # Basic styling (simplified to avoid syntax errors)
-        lines.extend([
-            "  %% Styling",
-            "  classDef service fill:#f9f",
-            "  classDef topic fill:#bbf",
-            "  classDef schema fill:#bfb",
-            "  class service service",
-            "  class topic topic",
-            "  class schema schema",
-        ])
+        # Enhanced styling
+        lines.extend(
+            [
+                "%% Styling",
+                "classDef service fill:#f9f,stroke:#333,stroke-width:2px;",
+                "classDef topic fill:#bbf,stroke:#333,stroke-width:2px;",
+                "classDef schema fill:#bfb,stroke:#333,stroke-width:2px;",
+                "classDef default fill:#fff,stroke:#333,stroke-width:1px;",
+                "%% Layout configuration",
+                "%%{init: {",
+                "'flowchart': {",
+                "'curve': 'monotoneX',",
+                "'nodeSpacing': 100,",
+                "'rankSpacing': 100,",
+                "'ranker': 'tight-tree'",
+                "},",
+                "'theme': 'default'",
+                "} }%%",
+                "%% Apply styles",
+                "class Services service;",
+                "class Topics topic;",
+                "class Schemas schema;",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -99,53 +101,77 @@ class MermaidGenerator(BaseGenerator):
         """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
 
-        # Simple HTML template with Mermaid.js
-        html_template = """<!DOCTYPE html>
+        try:
+            # Try to load template from resources
+            template = load_template("mermaid", "mermaid.html")
+            # Replace placeholders with positional formatting
+            return template.format(mermaid_code)
+        except Exception as e:
+            print(f"Error loading Mermaid template: {e}")
+            # Fallback template with literal curly braces - no template formatting
+            html_template = """<!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <title>Kafka Service Architecture</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@9.3.0/dist/mermaid.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        h1 {
-            color: #333;
-        }
-        .mermaid {
-            width: 100%;
-            overflow: auto;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-    </style>
-</head>
-<body>
-    <h1>Kafka Architecture Diagram</h1>
-    <div class="mermaid">
-{0}
-    </div>
-    <script>
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: 'default',
-            logLevel: 'error',
-            securityLevel: 'loose',
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true,
-                curve: 'basis'
+    <head>
+        <meta charset="UTF-8">
+        <title>Kafka Service Architecture</title>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
             }
-        });
-    </script>
-</body>
+            .diagram-container {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                margin-bottom: 20px;
+            }
+            h1 {
+                color: #2196f3;
+                border-bottom: 2px solid #e0e0e0;
+                padding-bottom: 10px;
+            }
+            .mermaid {
+                width: 100%;
+                overflow: auto;
+                padding: 20px;
+                background-color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Kafka Architecture Diagram</h1>
+        <div class="diagram-container">
+            <pre class="mermaid">
+{0}
+            </pre>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                mermaid.initialize({
+                    startOnLoad: true,
+                    theme: "default",
+                    flowchart: {
+                        useMaxWidth: true,
+                        htmlLabels: true,
+                        curve: "monotoneX",
+                        nodeSpacing: 100,
+                        rankSpacing: 100
+                    },
+                    securityLevel: "loose",
+                    maxTextSize: 90000
+                });
+                // Force mermaid to render
+                mermaid.init(undefined, '.mermaid');
+            });
+        </script>
+    </body>
 </html>""".format(mermaid_code)
 
-        return html_template
+            return html_template
 
     def generate_output(self, data: dict, file_path: Path) -> None:
         """Generate the visualization output."""
