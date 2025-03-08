@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from .base import BaseGenerator
-from .utils import clean_node_id, format_topic_name, load_template, write_file
+from .utils import clean_node_id, format_topic_name, write_file
 
 
 class MermaidGenerator(BaseGenerator):
@@ -100,78 +100,52 @@ class MermaidGenerator(BaseGenerator):
     def generate_html(self, data: dict) -> str:
         """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
-
-        try:
-            # Try to load template from resources
-            template = load_template("mermaid", "mermaid.html")
-            # Replace placeholders with positional formatting
-            return template.format(mermaid_code)
-        except Exception as e:
-            print(f"Error loading Mermaid template: {e}")
-            # Fallback template with literal curly braces - no template formatting
-            html_template = """<!DOCTYPE html>
+        
+        # Create HTML with direct string concatenation instead of templating
+        html = """<!DOCTYPE html>
 <html>
     <head>
         <meta charset="UTF-8">
         <title>Kafka Service Architecture</title>
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
         <style>
-            body {
-                font-family: Arial, sans-serif;
+            body { 
+                font-family: Arial, sans-serif; 
                 margin: 0;
-                padding: 20px;
-                background-color: #f5f5f5;
-            }
-            .diagram-container {
-                background-color: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                margin-bottom: 20px;
-            }
-            h1 {
-                color: #2196f3;
-                border-bottom: 2px solid #e0e0e0;
-                padding-bottom: 10px;
+                padding: 0;
             }
             .mermaid {
                 width: 100%;
+                height: 100vh;
                 overflow: auto;
                 padding: 20px;
-                background-color: white;
             }
         </style>
     </head>
     <body>
-        <h1>Kafka Architecture Diagram</h1>
-        <div class="diagram-container">
-            <pre class="mermaid">
-{0}
-            </pre>
-        </div>
+        <pre class="mermaid">
+""" + mermaid_code + """
+        </pre>
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                mermaid.initialize({
-                    startOnLoad: true,
-                    theme: "default",
-                    flowchart: {
-                        useMaxWidth: true,
-                        htmlLabels: true,
-                        curve: "monotoneX",
-                        nodeSpacing: 100,
-                        rankSpacing: 100
-                    },
-                    securityLevel: "loose",
-                    maxTextSize: 90000
-                });
-                // Force mermaid to render
-                mermaid.init(undefined, '.mermaid');
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: "default",
+                flowchart: {
+                    useMaxWidth: true,
+                    htmlLabels: true,
+                    curve: "monotoneX",
+                    nodeSpacing: 100,
+                    rankSpacing: 100,
+                    ranker: "tight-tree"
+                },
+                securityLevel: "loose",
+                maxTextSize: 90000
             });
         </script>
     </body>
-</html>""".format(mermaid_code)
+</html>"""
 
-            return html_template
+        return html
 
     def generate_output(self, data: dict, file_path: Path) -> None:
         """Generate the visualization output."""
