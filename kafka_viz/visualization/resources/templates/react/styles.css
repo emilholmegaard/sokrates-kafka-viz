@@ -149,3 +149,75 @@ button:hover {
 .legend-label {
     font-size: 12px;
 }
+
+/* Debug panel styles */
+#debug-panel {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 500px;
+    height: 200px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    overflow: auto;
+    z-index: 9999;
+    display: none;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.debug-message {
+    margin: 2px 0;
+    border-bottom: 1px solid #444;
+    padding-bottom: 2px;
+}
+
+.debug-error {
+    color: #ff8080;
+}
+
+.debug-warning {
+    color: #ffff80;
+}
+
+.debug-info {
+    color: #80ff80;
+}
+
+/* Loading bar styles */
+#loading-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 1000;
+}
+
+#loading-bar {
+    width: 300px;
+    height: 20px;
+    background-color: #333;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#loading-progress {
+    width: 0%;
+    height: 100%;
+    background-color: #4CAF50;
+    transition: width 0.3s ease-in-out;
+}
+
+#loading-status {
+    margin-top: 10px;
+    color: #333;
+    font-family: sans-serif;
+}

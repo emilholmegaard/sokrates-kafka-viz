@@ -5,6 +5,7 @@ This module provides the KafkaViz generator class for visualizing Kafka communic
 patterns using React and D3.js.
 """
 
+import datetime  # Add this import
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ from .utils import ensure_templates_exist, write_file
 logger = logging.getLogger(__name__)
 
 # Required template files
-REQUIRED_TEMPLATES = ["app.js", "styles.css"]
+REQUIRED_TEMPLATES = ["app.js", "simulation.worker.js", "styles.css", "index.html"]
 
 
 # Define TypedDict classes for better type safety
@@ -382,12 +383,28 @@ class KafkaViz(BaseGenerator):
     def _save_visualization_data(
         self, visualization_data: Dict[str, Any], output_dir: Path
     ) -> None:
-        """Save visualization data as a JavaScript file.
+        """Save visualization data as a JavaScript file."""
+        # Validate data structure
+        if not visualization_data.get("nodes"):
+            logger.error("No nodes found in visualization data")
+            visualization_data["nodes"] = []
 
-        Args:
-            visualization_data: Data structure for visualization
-            output_dir: Directory where to save the file
-        """
+        if not visualization_data.get("links"):
+            logger.error("No links found in visualization data")
+            visualization_data["links"] = []
+
+        if not visualization_data.get("schemas"):
+            logger.error("No schemas found in visualization data")
+            visualization_data["schemas"] = []
+
+        # Add validation info to help debugging
+        visualization_data["_debug"] = {
+            "generatedAt": str(datetime.datetime.now()),
+            "nodesCount": len(visualization_data["nodes"]),
+            "linksCount": len(visualization_data["links"]),
+            "schemasCount": len(visualization_data["schemas"]),
+        }
+
         vis_data_js = (
             f"window.visualizationData = {json.dumps(visualization_data, indent=2)};\n"
         )
@@ -405,19 +422,13 @@ class KafkaViz(BaseGenerator):
         logger.debug(f"  - Schemas: {len(visualization_data.get('schemas', []))}")
 
     def _generate_app_files(self, output_dir: Path) -> None:
-        """Generate and write HTML/CSS/JS files for the React app.
-
-        Args:
-            output_dir: Directory where to save the files
-        """
+        """Generate and write HTML/CSS/JS files for the React app."""
         try:
-            # Try to load templates
             success, template_contents = ensure_templates_exist(
                 "react", REQUIRED_TEMPLATES
             )
 
-            # Generate HTML template (this is kept here because it needs to reference the correct
-            # visualization-data.js file and might need customization)
+            # Updated index.html with better error handling and debugging
             index_html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -427,19 +438,89 @@ class KafkaViz(BaseGenerator):
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="root"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js">
+    <div id="root">
+        <div style="padding: 20px;">Loading visualization...</div>
+    </div>
+    
+    <!-- Add error boundary -->
+    <div id="error-container" style="display:none; color:red; padding:20px;"></div>
+
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e);
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-container').innerHTML = 
+                `<h3>Error Loading Visualization</h3><pre>${e.message}</pre>`;
+        });
+
+        // Debug helper
+        function checkDependencies() {
+            console.log('Checking dependencies...');
+            console.log('React:', typeof React !== 'undefined');
+            console.log('ReactDOM:', typeof ReactDOM !== 'undefined');
+            console.log('d3:', typeof d3 !== 'undefined');
+            console.log('Babel:', typeof Babel !== 'undefined');
+            console.log('visualizationData:', typeof window.visualizationData !== 'undefined');
+        }
     </script>
-    <script
-    src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js">
-    </script>
+
+    <!-- Load dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.14.7/babel.min.js">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.14.7/babel.min.js"></script>
+
+    <!-- Check dependencies loaded -->
+    <script>
+        checkDependencies();
     </script>
-    <!-- Load the data first -->
+
+    <!-- Load visualization data -->
     <script src="visualization-data.js"></script>
-    <!-- Then load the app -->
-    <script src="app.js" type="text/babel"></script>
+    
+    <!-- Verify data loaded -->
+    <script>
+        console.log('Visualization data loaded:', {
+            hasData: typeof window.visualizationData !== 'undefined',
+            nodes: window.visualizationData?.nodes?.length,
+            links: window.visualizationData?.links?.length,
+            schemas: window.visualizationData?.schemas?.length
+        });
+    </script>
+
+    <!-- Load app with error handling -->
+    <script type="text/babel">
+        try {
+            // Verify React is loaded before loading app.js
+            if (typeof React === 'undefined') {
+                throw new Error('React not loaded');
+            }
+            // Load the main app
+            fetch('app.js')
+                .then(response => response.text())
+                .then(code => {
+                    try {
+                        eval(Babel.transform(code, { presets: ['react'] }).code);
+                    } catch (error) {
+                        console.error('Error evaluating app code:', error);
+                        document.getElementById('error-container').style.display = 'block';
+                        document.getElementById('error-container').innerHTML = 
+                            `<h3>Error Running App</h3><pre>${error.message}</pre>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading app.js:', error);
+                    document.getElementById('error-container').style.display = 'block';
+                    document.getElementById('error-container').innerHTML = 
+                        `<h3>Error Loading App</h3><pre>${error.message}</pre>`;
+                });
+        } catch (error) {
+            console.error('Setup error:', error);
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-container').innerHTML = 
+                `<h3>Setup Error</h3><pre>${error.message}</pre>`;
+        }
+    </script>
 </body>
 </html>"""
             # Write files
@@ -447,8 +528,14 @@ class KafkaViz(BaseGenerator):
 
             if success:
                 # Write template files if successfully loaded
+                write_file(output_dir, "index.html", template_contents["index.html"])
                 write_file(output_dir, "styles.css", template_contents["styles.css"])
                 write_file(output_dir, "app.js", template_contents["app.js"])
+                write_file(
+                    output_dir,
+                    "simulation.worker.js",
+                    template_contents["simulation.worker.js"],
+                )
             else:
                 # Fall back to default files if templates couldn't be loaded
                 self._write_fallback_files(output_dir)

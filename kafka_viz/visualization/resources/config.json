@@ -14,6 +14,11 @@
       "name": "Simple HTML",
       "description": "Basic HTML visualization",
       "enabled": true
+    },
+    "architecture": {
+      "name": "Data Types Visualization",
+      "description": "Visualization of Data Types",
+      "enabled": true
     }
   }
 }
