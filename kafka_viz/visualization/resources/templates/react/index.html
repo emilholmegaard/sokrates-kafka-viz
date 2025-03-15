@@ -3,132 +3,22 @@
 
 <head>
     <meta charset="UTF-8">
-    <!-- Fix viewport meta tag -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kafka Communication Visualization</title>
     <link rel="stylesheet" href="styles.css">
 
-    <!-- Add Content Security Policy for workers -->
-    <meta http-equiv="Content-Security-Policy"
-        content="worker-src 'self' blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https:;">
+    <!-- Load dependencies with reliable CDNs -->
+    <script src="https://unpkg.com/react@17.0.2/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/d3@7.0.0/dist/d3.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.14.7/babel.min.js"></script>
 
-    <!-- Load Web Worker -->
+    <!-- Add loading progress tracker -->
     <script>
-        // Add worker initialization with message handling
-        function initWorker() {
-            if (window.Worker) {
-                try {
-                    window.simulationWorker = new Worker('simulation.worker.js');
-                    console.log('Simulation worker initialized');
-
-                    // Add message handler for worker
-                    window.simulationWorker.onmessage = function (e) {
-                        console.log('Worker message:', e.data.type);
-                        if (e.data.type === 'tick') {
-                            // Update visualization on tick
-                            if (window.updateVisualization) {
-                                window.updateVisualization(e.data.nodes, e.data.links);
-                            }
-                        } else if (e.data.type === 'end') {
-                            console.log('Simulation completed');
-                            updateLoadingProgress(LoadingStates.COMPLETE);
-                        }
-                    };
-
-                    window.simulationWorker.onerror = function (error) {
-                        console.error('Worker error:', error);
-                        updateLoadingProgress({
-                            progress: 0,
-                            message: 'Error: Simulation failed'
-                        });
-                    };
-
-                    return true;
-                } catch (error) {
-                    console.error('Failed to initialize worker:', error);
-                    return false;
-                }
-            }
-            console.warn('Web Workers not supported');
-            return false;
-        }
-    </script>
-
-    <!-- Load dependencies with fallback CDNs -->
-    <script>
-        // Library definitions with versions and fallbacks
-        const LIBRARIES = {
-            babel: {
-                version: '7.23.8',
-                urls: [
-                    'https://unpkg.com/@babel/standalone@7.23.8/babel.min.js',
-                    'https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.8/babel.min.js',
-                    'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.8/babel.min.js'
-                ]
-            },
-            react: {
-                version: '17.0.2',
-                urls: [
-                    'https://unpkg.com/react@17.0.2/umd/react.development.js',
-                    'https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.development.js'
-                ]
-            },
-            reactDom: {
-                version: '17.0.2',
-                urls: [
-                    'https://unpkg.com/react-dom@17.0.2/umd/react-dom.development.js',
-                    'https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.development.js'
-                ]
-            },
-            d3: {
-                version: '7.0.0',
-                urls: [
-                    'https://unpkg.com/d3@7.0.0/dist/d3.min.js',
-                    'https://cdn.jsdelivr.net/npm/d3@7.0.0/dist/d3.min.js'
-                ]
-            }
-        };
-
-        // Improved script loader with timeout
-        function loadScriptWithFallbacks(urls, timeout = 5000) {
-            if (!urls.length) {
-                return Promise.reject(new Error('All CDNs failed'));
-            }
-
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = urls[0];
-
-                const timeoutId = setTimeout(() => {
-                    console.warn(`Timeout loading ${urls[0]}, trying next fallback...`);
-                    script.remove();
-                    loadScriptWithFallbacks(urls.slice(1), timeout)
-                        .then(resolve)
-                        .catch(reject);
-                }, timeout);
-
-                script.onload = () => {
-                    clearTimeout(timeoutId);
-                    resolve();
-                };
-
-                script.onerror = () => {
-                    clearTimeout(timeoutId);
-                    script.remove();
-                    loadScriptWithFallbacks(urls.slice(1), timeout)
-                        .then(resolve)
-                        .catch(reject);
-                };
-
-                document.head.appendChild(script);
-            });
-        }
-
-        // Add loading progress tracker
+        // Define loading states
         const LoadingStates = {
             LIBRARIES: { progress: 25, message: 'Loading libraries...' },
-            BABEL: { progress: 50, message: 'Loading Babel...' },
-            DATA: { progress: 75, message: 'Loading visualization data...' },
+            DATA: { progress: 50, message: 'Loading visualization data...' },
             APP: { progress: 90, message: 'Initializing application...' },
             COMPLETE: { progress: 100, message: 'Ready!' }
         };
@@ -150,36 +40,14 @@
             }
         }
 
-        // Update loadLibraries function
-        async function loadLibraries() {
-            try {
-                updateLoadingProgress(LoadingStates.LIBRARIES);
+        // Make loading states globally available
+        window.LoadingStates = LoadingStates;
+        window.updateLoadingProgress = updateLoadingProgress;
 
-                // Load Babel first
-                await loadScriptWithFallbacks(LIBRARIES.babel.urls);
-                updateLoadingProgress(LoadingStates.BABEL);
-                console.log(`Babel v${LIBRARIES.babel.version} loaded`);
-
-                // Load remaining libraries in parallel
-                await Promise.all([
-                    loadScriptWithFallbacks(LIBRARIES.react.urls),
-                    loadScriptWithFallbacks(LIBRARIES.reactDom.urls),
-                    loadScriptWithFallbacks(LIBRARIES.d3.urls)
-                ]);
-
-                // Initialize app after libraries are loaded
-                initializeApp();
-            } catch (error) {
-                console.error('Failed to load libraries:', error);
-                updateLoadingProgress({
-                    progress: 0,
-                    message: `Error: ${error.message}`
-                });
-            }
-        }
-
-        // Start loading libraries
-        loadLibraries();
+        // Start with libraries state
+        window.addEventListener('DOMContentLoaded', function() {
+            updateLoadingProgress(LoadingStates.LIBRARIES);
+        });
     </script>
 </head>
 
@@ -197,214 +65,126 @@
     <div id="debug-panel" style="display: none;">
         <div class="debug-header">
             <span>Debug Console</span>
-            <span>
-                <button id="console-toggle" onclick="toggleConsole()">Console: Off</button>
-                <button onclick="clearDebug()">Clear</button>
-                <button onclick="toggleDebug()">Hide</button>
-            </span>
+            <button onclick="toggleDebug()">Hide</button>
         </div>
         <div id="debug-log"></div>
     </div>
 
     <!-- Debug Helper Script -->
     <script>
-        // Debug state initialization
-        window.debugEnabled = true;
-        window.consoleEnabled = true;
-        window.debugLog = [];
-        window.debugPanel = null;
-        window.lastLogMessage = '';
-        window.duplicateCount = 0;
-        window.consoleEnabled = false; // Add console logging state
-
-        // Add console toggle function
-        function toggleConsole() {
-            window.consoleEnabled = !window.consoleEnabled;
-            console.log(`Console logging ${window.consoleEnabled ? 'enabled' : 'disabled'}`);
-
-            // Update button text
-            const toggleBtn = document.getElementById('console-toggle');
-            if (toggleBtn) {
-                toggleBtn.textContent = `Console: ${window.consoleEnabled ? 'On' : 'Off'}`;
-            }
-        }
-
-        // Override console methods with toggle check
-        const originalConsole = {
-            log: console.log.bind(console),
-            warn: console.warn.bind(console),
-            error: console.error.bind(console)
-        };
-
-        console.log = function () {
-            if (window.consoleEnabled) {
-                logDebug('info', Array.from(arguments).join(' '));
-            }
-        };
-
-        console.warn = function () {
-            if (window.consoleEnabled) {
-                logDebug('warning', Array.from(arguments).join(' '));
-            }
-        };
-
-        console.error = function () {
-            // Always show errors, even when console is disabled
-            logDebug('error', Array.from(arguments).join(' '));
-            if (window.duplicateCount === 1) {
-                toggleDebug();
-            }
-        };
-
-        // Initialize debug panel on load
-        window.addEventListener('DOMContentLoaded', function () {
-            window.debugPanel = document.getElementById('debug-panel');
-            if (!window.debugPanel) {
-                originalConsole.error('Debug panel element not found!');
-            }
-            // Keep debug panel hidden by default
-            window.debugPanel.style.display = 'none';
-        });
-
-        // Enhanced debug toggle with error handling
+        // Toggle debug panel
         function toggleDebug() {
-            try {
-                const panel = document.getElementById('debug-panel');
-                if (!panel) throw new Error('Debug panel not found');
-
-                panel.style.display = panel.style.display === 'none' || panel.style.display === '' ? 'block' : 'none';
-                window.debugEnabled = panel.style.display === 'block';
-                console.log(`Debug panel ${window.debugEnabled ? 'enabled' : 'disabled'}`);
-            } catch (error) {
-                console.error('Error toggling debug panel:', error);
-            }
+            const panel = document.getElementById('debug-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
-
-        function clearDebug() {
-            document.getElementById('debug-log').innerHTML = '';
-            window.debugLog = [];
-        }
-
-        // Log page load 
-        console.log('Page loaded. Press D key to toggle debug panel.');
 
         // Add keyboard shortcuts
         document.addEventListener('keydown', function (e) {
             if (e.key === 'd' || e.key === 'D') {
                 toggleDebug();
-            } else if (e.key === 'c' || e.key === 'C') {
-                toggleConsole();
             }
         });
 
-        // Enhanced dependency checking
-        window.addEventListener('load', function () {
-            console.log('Checking dependencies...');
+        // Simple debug log
+        function logDebug(message) {
+            console.log(message);
+            const debugLog = document.getElementById('debug-log');
+            if (debugLog) {
+                const entry = document.createElement('div');
+                entry.textContent = message;
+                debugLog.appendChild(entry);
+            }
+        }
 
-            // Check required libraries
-            const requiredDeps = {
-                'React': typeof React !== 'undefined' ? React.version : undefined,
-                'ReactDOM': typeof ReactDOM !== 'undefined' ? ReactDOM.version : undefined,
-                'd3': typeof d3 !== 'undefined' ? d3.version : undefined,
-                'Babel': typeof Babel !== 'undefined' ? 'loaded' : undefined
-            };
+        // Override console methods to add to debug panel
+        const originalConsole = {
+            log: console.log,
+            warn: console.warn,
+            error: console.error
+        };
 
-            Object.entries(requiredDeps).forEach(([name, version]) => {
-                if (!version) {
-                    console.error(`${name} is not loaded!`);
-                } else {
-                    console.log(`${name} version: ${version}`);
-                }
-            });
+        console.log = function(...args) {
+            originalConsole.log.apply(console, args);
+            logDebug('[LOG] ' + args.join(' '));
+        };
 
-            // Check visualization data with timeout
-            setTimeout(function () {
-                if (!window.visualizationData) {
-                    console.error('visualization-data.js failed to load!');
-                } else {
-                    const data = window.visualizationData;
-                    console.log('Data available:', {
-                        nodes: data.nodes?.length || 0,
-                        links: data.links?.length || 0,
-                        schemas: data.schemas?.length || 0
-                    });
-                }
-            }, 1000);
-        });
+        console.warn = function(...args) {
+            originalConsole.warn.apply(console, args);
+            logDebug('[WARN] ' + args.join(' '));
+        };
+
+        console.error = function(...args) {
+            originalConsole.error.apply(console, args);
+            logDebug('[ERROR] ' + args.join(' '));
+            toggleDebug(); // Show debug on error
+        };
     </script>
 
     <!-- Load data and app -->
     <script>
-        function initializeApp() {
+        // Check for required libraries
+        window.addEventListener('load', function() {
+            console.log('Checking dependencies...');
+            
+            if (typeof React === 'undefined') {
+                console.error('React is not loaded!');
+                return;
+            }
+            
+            if (typeof ReactDOM === 'undefined') {
+                console.error('ReactDOM is not loaded!');
+                return;
+            }
+            
+            if (typeof d3 === 'undefined') {
+                console.error('D3 is not loaded!');
+                return;
+            }
+            
+            if (typeof Babel === 'undefined') {
+                console.error('Babel is not loaded!');
+                return;
+            }
+            
+            console.log('All dependencies loaded successfully!');
             updateLoadingProgress(LoadingStates.DATA);
-
-            // Initialize worker first
-            const workerAvailable = initWorker();
-            console.log('Worker available:', workerAvailable);
-
+            
+            // Load visualization data
             const dataScript = document.createElement('script');
             dataScript.src = 'visualization-data.js';
-
-            dataScript.onload = () => {
+            
+            dataScript.onload = function() {
+                console.log('Visualization data loaded');
+                
                 if (!window.visualizationData) {
-                    console.error('Visualization data not loaded properly');
-                    updateLoadingProgress({
-                        progress: 0,
-                        message: 'Error: Data loading failed'
-                    });
+                    console.error('Visualization data not defined!');
                     return;
                 }
-
-                console.log('Data loaded:', {
-                    nodes: window.visualizationData.nodes.length,
-                    links: window.visualizationData.links.length
-                });
-
+                
                 updateLoadingProgress(LoadingStates.APP);
-
-                // Load app.js with Babel
+                
+                // Load the app script
                 const appScript = document.createElement('script');
                 appScript.type = 'text/babel';
                 appScript.src = 'app.js';
-
-                appScript.onload = () => {
-                    console.log('App.js loaded, starting simulation');
-                    if (workerAvailable && window.simulationWorker) {
-                        // Start simulation in worker
-                        window.simulationWorker.postMessage({
-                            nodes: window.visualizationData.nodes,
-                            links: window.visualizationData.links,
-                            width: window.innerWidth,
-                            height: window.innerHeight
-                        });
-                    } else {
-                        // No worker, complete immediately
-                        console.log('No worker available, completing directly');
-                        updateLoadingProgress(LoadingStates.COMPLETE);
-                    }
+                
+                appScript.onload = function() {
+                    console.log('App script loaded!');
                 };
-
-                appScript.onerror = (error) => {
-                    console.error('Failed to load app.js:', error);
-                    updateLoadingProgress({
-                        progress: 0,
-                        message: 'Error: App loading failed'
-                    });
+                
+                appScript.onerror = function(error) {
+                    console.error('Failed to load app script:', error);
                 };
-
+                
                 document.body.appendChild(appScript);
             };
-
-            dataScript.onerror = (error) => {
-                console.error('Failed to load visualization-data.js:', error);
-                updateLoadingProgress({
-                    progress: 0,
-                    message: 'Error: Data loading failed'
-                });
+            
+            dataScript.onerror = function(error) {
+                console.error('Failed to load visualization data:', error);
             };
-
+            
             document.body.appendChild(dataScript);
-        }
+        });
     </script>
 </body>
 
