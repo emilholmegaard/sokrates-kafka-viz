@@ -158,37 +158,15 @@ try {
                     node.y = Math.floor(i / gridSize) * 100 + height / 4;
                 });
 
-                // Create a force simulation
-                console.log('Creating force simulation');
-                const sim = createSimulation(data, width, height, () => {
-                    // Only update visible elements
-                    const transform = d3.zoomTransform(svg.node());
-
-                    link
-                        .attr("visibility", d =>
-                            isNodeInViewport(d.source, transform) &&
-                                isNodeInViewport(d.target, transform) ? "visible" : "hidden")
-                        .filter(d => isNodeInViewport(d.source, transform) &&
-                            isNodeInViewport(d.target, transform))
-                        .attr("x1", d => d.source.x)
-                        .attr("y1", d => d.source.y)
-                        .attr("x2", d => d.target.x)
-                        .attr("y2", d => d.target.y);
-
-                    node
-                        .attr("visibility", d =>
-                            isNodeInViewport(d, transform) ? "visible" : "hidden")
-                        .filter(d => isNodeInViewport(d, transform))
-                        .attr("cx", d => d.x)
-                        .attr("cy", d => d.y);
-
-                    label
-                        .attr("visibility", d =>
-                            isNodeInViewport(d, transform) ? "visible" : "hidden")
-                        .filter(d => isNodeInViewport(d, transform))
-                        .attr("x", d => d.x)
-                        .attr("y", d => d.y);
-                });
+                // Create a force simulation on main thread directly
+                console.log('Creating force simulation on main thread');
+                const sim = d3.forceSimulation(data.nodes)
+                    .force("link", d3.forceLink(data.links).id(d => d.id).distance(50))
+                    .force("charge", d3.forceManyBody().strength(-100))
+                    .force("center", d3.forceCenter(width / 2, height / 2))
+                    .force("collide", d3.forceCollide().radius(30))
+                    .alphaDecay(0.05)
+                    .alphaMin(0.001);
 
                 setSimulation(sim);
 
@@ -247,6 +225,46 @@ try {
                     });
 
                 console.log('Visualization elements created successfully');
+
+                // On each tick, update the visualization
+                sim.on("tick", () => {
+                    // Only update visible elements
+                    const transform = d3.zoomTransform(svg.node());
+
+                    link
+                        .attr("visibility", d =>
+                            isNodeInViewport(d.source, transform) &&
+                                isNodeInViewport(d.target, transform) ? "visible" : "hidden")
+                        .filter(d => isNodeInViewport(d.source, transform) &&
+                            isNodeInViewport(d.target, transform))
+                        .attr("x1", d => d.source.x)
+                        .attr("y1", d => d.source.y)
+                        .attr("x2", d => d.target.x)
+                        .attr("y2", d => d.target.y);
+
+                    node
+                        .attr("visibility", d =>
+                            isNodeInViewport(d, transform) ? "visible" : "hidden")
+                        .filter(d => isNodeInViewport(d, transform))
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+
+                    label
+                        .attr("visibility", d =>
+                            isNodeInViewport(d, transform) ? "visible" : "hidden")
+                        .filter(d => isNodeInViewport(d, transform))
+                        .attr("x", d => d.x)
+                        .attr("y", d => d.y);
+                });
+
+                // Notify when simulation is done
+                sim.on("end", () => {
+                    console.log('Simulation completed!');
+                    // Here is where you'd update the loading progress to 100%
+                    if (window.updateLoadingProgress && window.LoadingStates) {
+                        window.updateLoadingProgress(window.LoadingStates.COMPLETE);
+                    }
+                });
 
                 // Handle schema highlighting
                 if (selectedSchema) {
@@ -384,49 +402,6 @@ try {
             }
         }, [data, selectedNode, selectedSchema, setSelectedNode]);
 
-        React.useEffect(() => {
-            try {
-                // Create Web Worker
-                const worker = new Worker('simulation.worker.js');
-
-                worker.onmessage = function (event) {
-                    const { type, nodes, links } = event.data;
-
-                    // Update positions
-                    node.attr("cx", d => d.x)
-                        .attr("cy", d => d.y);
-
-                    link.attr("x1", d => d.source.x)
-                        .attr("y1", d => d.source.y)
-                        .attr("x2", d => d.target.x)
-                        .attr("y2", d => d.target.y);
-
-                    label.attr("x", d => d.x)
-                        .attr("y", d => d.y);
-
-                    if (type === 'end') {
-                        console.log('Simulation completed');
-                        worker.terminate();
-                    }
-                };
-
-                // Start simulation in worker
-                worker.postMessage({
-                    nodes: data.nodes,
-                    links: data.links,
-                    width: width,
-                    height: height
-                });
-
-                // Cleanup
-                return () => {
-                    worker.terminate();
-                };
-            } catch (error) {
-                console.error('Error in Graph:', error);
-            }
-        }, [data, selectedNode, selectedSchema]);
-
         return (
             <div className="graph-container">
                 <svg ref={svgRef} style={{ width: '100%', height: '100%' }}></svg>
@@ -531,6 +506,13 @@ try {
     );
     console.log('React app rendered successfully!');
 
+    // Manually set progress to complete after a short delay
+    setTimeout(() => {
+        if (window.updateLoadingProgress && window.LoadingStates) {
+            window.updateLoadingProgress(window.LoadingStates.COMPLETE);
+        }
+    }, 2000);
+
 } catch (error) {
     console.error('Fatal error in React application:', error);
     document.getElementById('root').innerHTML = `
@@ -546,28 +528,4 @@ try {
       </ol>
     </div>
   `;
-}
-
-function createSimulation(data, width, height, onTick) {
-    if (window.Worker) {
-        try {
-            const worker = new Worker('simulation.worker.js');
-            // ...worker setup code...
-            return worker;
-        } catch (error) {
-            console.warn('Web Worker failed, falling back to main thread:', error);
-            return createMainThreadSimulation(data, width, height, onTick);
-        }
-    } else {
-        console.warn('Web Workers not supported, using main thread');
-        return createMainThreadSimulation(data, width, height, onTick);
-    }
-}
-
-function createMainThreadSimulation(data, width, height, onTick) {
-    // Existing simulation code as fallback
-    return d3.forceSimulation(data.nodes)
-        .force("link", d3.forceLink(data.links).id(d => d.id).distance(50))
-        // ...rest of force setup...
-        .on("tick", onTick);
 }
