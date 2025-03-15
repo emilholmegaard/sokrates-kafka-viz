@@ -19,7 +19,7 @@ from .utils import ensure_templates_exist, write_file
 logger = logging.getLogger(__name__)
 
 # Required template files
-REQUIRED_TEMPLATES = ["app.js", "simulation.worker.js", "styles.css", "index.html"]
+REQUIRED_TEMPLATES = ["app.js",  "styles.css", "index.html"]
 
 
 # Define TypedDict classes for better type safety
@@ -531,10 +531,6 @@ class KafkaViz(BaseGenerator):
                 write_file(output_dir, "index.html", template_contents["index.html"])
                 write_file(output_dir, "styles.css", template_contents["styles.css"])
                 write_file(output_dir, "app.js", template_contents["app.js"])
-                write_file(
-                    output_dir,
-                    "simulation.worker.js",
-                    template_contents["simulation.worker.js"],
                 )
             else:
                 # Fall back to default files if templates couldn't be loaded
