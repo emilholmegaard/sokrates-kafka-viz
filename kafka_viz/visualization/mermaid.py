@@ -1,3 +1,4 @@
+"""Generator for Mermaid diagram-based visualization."""
 from pathlib import Path
 
 from .base import BaseGenerator
