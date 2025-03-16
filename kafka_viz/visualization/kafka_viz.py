@@ -531,7 +531,6 @@ class KafkaViz(BaseGenerator):
                 write_file(output_dir, "index.html", template_contents["index.html"])
                 write_file(output_dir, "styles.css", template_contents["styles.css"])
                 write_file(output_dir, "app.js", template_contents["app.js"])
-                )
             else:
                 # Fall back to default files if templates couldn't be loaded
                 self._write_fallback_files(output_dir)
