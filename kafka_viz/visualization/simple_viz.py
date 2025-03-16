@@ -1,3 +1,4 @@
+"""Simple HTML visualization generator for Kafka architecture."""
 from pathlib import Path
 
 from .base import BaseGenerator
