@@ -1,8 +1,9 @@
 """Generator for Mermaid diagram-based visualization."""
+
 from pathlib import Path
 
 from .base import BaseGenerator
-from .utils import clean_node_id, format_topic_name, write_file
+from .utils import clean_node_id, format_topic_name
 
 
 class MermaidGenerator(BaseGenerator):
@@ -103,6 +104,7 @@ class MermaidGenerator(BaseGenerator):
         mermaid_code = self.generate_diagram(data)
 
         # Create HTML with direct string concatenation instead of templating
+        # fmt: off
         html = (
             """<!DOCTYPE html>
 <html>
@@ -147,8 +149,8 @@ class MermaidGenerator(BaseGenerator):
             });
         </script>
     </body>
-</html>"""
-        )
+</html>""")   # noqa: E501
+        # # fmt: on
 
         return html
 

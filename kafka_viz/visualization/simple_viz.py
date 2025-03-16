@@ -1,4 +1,5 @@
 """Simple HTML visualization generator for Kafka architecture."""
+
 from pathlib import Path
 
 from .base import BaseGenerator
@@ -101,7 +102,7 @@ class SimpleViz(BaseGenerator):
     def generate_html(self, data: dict) -> str:
         """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
-
+        # fmt: off
         html_template = """<!DOCTYPE html>
 <html>
     <head>
@@ -138,7 +139,8 @@ class SimpleViz(BaseGenerator):
             }});
         </script>
     </body>
-</html>"""
+</html>"""  # noqa: E501
+        # fmt: on
 
         # Double up curly braces in the template for literal curly braces
         result = html_template.format(diagram_content=mermaid_code)
