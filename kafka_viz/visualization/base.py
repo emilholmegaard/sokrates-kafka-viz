@@ -1,7 +1,7 @@
-# base.py
+"""Base class for visualization generators."""
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 
 class BaseGenerator(ABC):
