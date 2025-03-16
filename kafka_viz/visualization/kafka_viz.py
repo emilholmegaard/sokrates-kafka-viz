@@ -19,7 +19,7 @@ from .utils import ensure_templates_exist, write_file
 logger = logging.getLogger(__name__)
 
 # Required template files
-REQUIRED_TEMPLATES = ["app.js",  "styles.css", "index.html"]
+REQUIRED_TEMPLATES = ["app.js", "styles.css", "index.html"]
 
 
 # Define TypedDict classes for better type safety
@@ -429,6 +429,7 @@ class KafkaViz(BaseGenerator):
             )
 
             # Updated index.html with better error handling and debugging
+            # fmt: off
             index_html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -465,10 +466,14 @@ class KafkaViz(BaseGenerator):
     </script>
 
     <!-- Load dependencies -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.14.7/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.14.7/babel.min.js">
+    </script>
 
     <!-- Check dependencies loaded -->
     <script>
@@ -522,7 +527,8 @@ class KafkaViz(BaseGenerator):
         }
     </script>
 </body>
-</html>"""
+</html>"""  # noqa: E501
+            # fmt: on
             # Write files
             write_file(output_dir, "index.html", index_html)
 
