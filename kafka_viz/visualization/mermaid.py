@@ -7,7 +7,7 @@ from .utils import clean_node_id, format_topic_name, write_file
 
 class MermaidGenerator(BaseGenerator):
     """Mermaid diagram generator for Kafka visualization."""
-    
+
     def __init__(self):
         super().__init__()
         self.name = "Mermaid Diagram"
@@ -101,9 +101,10 @@ class MermaidGenerator(BaseGenerator):
     def generate_html(self, data: dict) -> str:
         """Generate HTML with embedded Mermaid diagram."""
         mermaid_code = self.generate_diagram(data)
-        
+
         # Create HTML with direct string concatenation instead of templating
-        html = """<!DOCTYPE html>
+        html = (
+            """<!DOCTYPE html>
 <html>
     <head>
         <meta charset="UTF-8">
@@ -125,7 +126,9 @@ class MermaidGenerator(BaseGenerator):
     </head>
     <body>
         <pre class="mermaid">
-""" + mermaid_code + """
+"""
+            + mermaid_code
+            + """
         </pre>
         <script>
             mermaid.initialize({
@@ -145,6 +148,7 @@ class MermaidGenerator(BaseGenerator):
         </script>
     </body>
 </html>"""
+        )
 
         return html
 
@@ -152,15 +156,15 @@ class MermaidGenerator(BaseGenerator):
         """Generate the visualization output."""
         try:
             html_content = self.generate_html(data)
-            
+
             # Ensure directory exists
             if not file_path.exists():
                 file_path.mkdir(parents=True)
-                
+
             output_file = file_path / self.output_filename
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
-                
+
             print(f"Mermaid visualization generated at {output_file}")
         except Exception as e:
             print(f"Error generating Mermaid visualization: {e}")
