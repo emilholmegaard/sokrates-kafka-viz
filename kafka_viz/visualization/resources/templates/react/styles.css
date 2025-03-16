@@ -124,13 +124,17 @@ button:hover {
 }
 
 .legend {
-    position: absolute;
+    position: fixed;
+    /* Change from absolute to fixed */
     bottom: 1rem;
     left: 1rem;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.9);
+    /* Slightly more opaque background */
     padding: 0.5rem;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+    z-index: 1000;
+    /* Ensure legend stays on top */
 }
 
 .legend-item {
