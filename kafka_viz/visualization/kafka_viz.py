@@ -442,7 +442,6 @@ class KafkaViz(BaseGenerator):
     <div id="root">
         <div style="padding: 20px;">Loading visualization...</div>
     </div>
-    
     <!-- Add error boundary -->
     <div id="error-container" style="display:none; color:red; padding:20px;"></div>
 
@@ -450,8 +449,7 @@ class KafkaViz(BaseGenerator):
         window.addEventListener('error', function(e) {
             console.error('Global error:', e);
             document.getElementById('error-container').style.display = 'block';
-            document.getElementById('error-container').innerHTML = 
-                `<h3>Error Loading Visualization</h3><pre>${e.message}</pre>`;
+            document.getElementById('error-container').innerHTML = `<h3>Error Loading Visualization</h3><pre>${e.message}</pre>`;
         });
 
         // Debug helper
@@ -482,7 +480,6 @@ class KafkaViz(BaseGenerator):
 
     <!-- Load visualization data -->
     <script src="visualization-data.js"></script>
-    
     <!-- Verify data loaded -->
     <script>
         console.log('Visualization data loaded:', {
@@ -509,21 +506,18 @@ class KafkaViz(BaseGenerator):
                     } catch (error) {
                         console.error('Error evaluating app code:', error);
                         document.getElementById('error-container').style.display = 'block';
-                        document.getElementById('error-container').innerHTML = 
-                            `<h3>Error Running App</h3><pre>${error.message}</pre>`;
+                        document.getElementById('error-container').innerHTML = `<h3>Error Running App</h3><pre>${error.message}</pre>`;
                     }
                 })
                 .catch(error => {
                     console.error('Error loading app.js:', error);
                     document.getElementById('error-container').style.display = 'block';
-                    document.getElementById('error-container').innerHTML = 
-                        `<h3>Error Loading App</h3><pre>${error.message}</pre>`;
+                    document.getElementById('error-container').innerHTML = `<h3>Error Loading App</h3><pre>${error.message}</pre>`;
                 });
         } catch (error) {
             console.error('Setup error:', error);
             document.getElementById('error-container').style.display = 'block';
-            document.getElementById('error-container').innerHTML = 
-                `<h3>Setup Error</h3><pre>${error.message}</pre>`;
+            document.getElementById('error-container').innerHTML = `<h3>Setup Error</h3><pre>${error.message}</pre>`;
         }
     </script>
 </body>

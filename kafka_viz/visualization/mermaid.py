@@ -113,8 +113,8 @@ class MermaidGenerator(BaseGenerator):
         <title>Kafka Service Architecture</title>
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
         <style>
-            body { 
-                font-family: Arial, sans-serif; 
+            body {
+                font-family: Arial, sans-serif;
                 margin: 0;
                 padding: 0;
             }
