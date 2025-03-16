@@ -11,7 +11,10 @@ Current implemented features:
   - JSON Schema (implemented)
   - Additional formats planned (see issues #22)
 - Kafka topic dependency mapping
-- Interactive visualization of service relationships
+- Multiple visualization types:
+  - Interactive React-based visualization
+  - Mermaid diagrams
+  - Simple HTML outputs
 - Configurable analysis rules
 - Basic state persistence
 - Analysis resume capability
@@ -39,6 +42,7 @@ Arguments:
 Options:
   --output PATH         Output file for analysis results [default: analysis_output.json]
   --include-tests      Include test files in analysis [default: False]
+  --verbose, -v        Enable verbose logging
   --help              Show this message and exit.
 ```
 
@@ -58,14 +62,43 @@ Arguments:
   INPUT_FILE  JSON file containing analysis results [required]
 
 Options:
-  --output PATH  Output HTML file for visualization [default: architecture.html]
-  --help       Show this message and exit.
+  --output PATH        Output directory for visualization [default: kafka_visualization]
+  --type, -t TEXT      Type of visualization to generate (react, mermaid, simple)
+  --list, -l           List available visualization types
+  --help               Show this message and exit.
 ```
 
-Example:
+Example with specific visualization type:
 ```bash
-kafka-viz visualize my-analysis.json --output architecture.html
+kafka-viz visualize my-analysis.json --type react
 ```
+
+### Info Command
+
+View information about available visualizations:
+
+```bash
+kafka-viz info
+```
+
+## Visualization Types
+
+The tool supports multiple visualization types:
+
+1. **React Interactive** (`--type react`)
+   - Interactive D3.js visualization with React UI
+   - Shows services, topics, and their relationships
+   - Includes detailed sidebar with additional information
+   - Supports filtering, zooming, and panning
+
+2. **Mermaid Diagram** (`--type mermaid`)
+   - Simple Mermaid.js flowchart diagram
+   - Shows services, topics, and their relationships
+   - Lightweight and embeddable
+
+3. **Simple HTML** (`--type simple`)
+   - Basic HTML visualization with minimal dependencies
+   - Shows services, topics, and their relationships
 
 ## Configuration
 
@@ -113,6 +146,23 @@ output:
 logging:
   level: INFO
   file: kafka_viz.log
+
+# Visualization configuration
+visualizations:
+  default: react  # Default visualization type
+  types:
+    react:
+      enabled: true
+      name: "React Interactive"
+      description: "Interactive D3.js visualization with React UI"
+    mermaid:
+      enabled: true
+      name: "Mermaid Diagram"
+      description: "Simple Mermaid.js flowchart diagram"
+    simple:
+      enabled: true
+      name: "Simple HTML"
+      description: "Basic HTML visualization"
 ```
 
 ## Analysis Output
@@ -165,6 +215,8 @@ Current language analyzer support:
 
 ## Extending the Tool
 
+### Creating Custom Analyzers
+
 You can create custom analyzers by implementing the `BaseAnalyzer` interface:
 
 ```python
@@ -184,6 +236,40 @@ from kafka_viz.core.runner import AnalysisRunner
 
 runner = AnalysisRunner(config)
 runner.register_analyzer(CustomAnalyzer())
+```
+
+### Creating Custom Visualization Generators
+
+You can create custom visualization generators by extending the `BaseGenerator` class:
+
+```python
+from kafka_viz.visualization import BaseGenerator
+from pathlib import Path
+from typing import Dict, Any
+
+class CustomVisualizer(BaseGenerator):
+    def __init__(self):
+        super().__init__()
+        self.name = "Custom Visualization"
+        self.description = "My custom visualization type"
+        
+    def generate_html(self, data: Dict[str, Any]) -> str:
+        # Generate HTML content
+        return "<html>...</html>"
+        
+    def generate_output(self, data: Dict[str, Any], file_path: Path) -> None:
+        # Generate visualization files
+        html = self.generate_html(data)
+        with open(file_path / "custom_viz.html", "w") as f:
+            f.write(html)
+```
+
+Then register your visualization generator with the factory:
+
+```python
+from kafka_viz.visualization import visualization_factory
+
+visualization_factory.register_generator("custom", CustomVisualizer)
 ```
 
 ## Troubleshooting

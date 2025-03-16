@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kafka Communication Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Load dependencies from CDNJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.21.2/babel.min.js"
+        crossorigin="anonymous"></script>
+
+    <!-- Add loading progress tracker -->
+    <script>
+        // Define loading states
+        const LoadingStates = {
+            LIBRARIES: { progress: 25, message: 'Loading libraries...' },
+            DATA: { progress: 50, message: 'Loading visualization data...' },
+            APP: { progress: 70, message: 'Initializing application...' },
+            COMPLETE: { progress: 100, message: 'Ready!' }
+        };
+
+        function updateLoadingProgress(state) {
+            const progress = document.getElementById('loading-progress');
+            const status = document.getElementById('loading-status');
+            const container = document.getElementById('loading-container');
+
+            if (progress && status) {
+                progress.style.width = `${state.progress}%`;
+                status.textContent = state.message;
+
+                if (state === LoadingStates.COMPLETE) {
+                    setTimeout(() => {
+                        container.style.display = 'none';
+                    }, 1000);
+                }
+            }
+        }
+
+        // Make loading states globally available
+        window.LoadingStates = LoadingStates;
+        window.updateLoadingProgress = updateLoadingProgress;
+
+        // Start with libraries state
+        window.addEventListener('DOMContentLoaded', function () {
+            updateLoadingProgress(LoadingStates.LIBRARIES);
+        });
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <div id="loading-container">
+        <div id="loading-bar">
+            <div id="loading-progress"></div>
+        </div>
+        <div id="loading-status">Loading libraries...</div>
+    </div>
+
+    <!-- Debug Panel (hidden by default) -->
+    <div id="debug-panel" style="display: none;">
+        <div class="debug-header">
+            <span>Debug Console</span>
+            <button onclick="toggleDebug()">Hide</button>
+        </div>
+        <div id="debug-log"></div>
+    </div>
+
+    <!-- Debug Helper Script -->
+    <script>
+        // Toggle debug panel
+        function toggleDebug() {
+            const panel = document.getElementById('debug-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'd' || e.key === 'D') {
+                toggleDebug();
+            }
+        });
+
+        // Simple debug log
+        function logDebug(message) {
+            const debugLog = document.getElementById('debug-log');
+            if (debugLog) {
+                const entry = document.createElement('div');
+                entry.textContent = message;
+                debugLog.appendChild(entry);
+            }
+        }
+
+        // Override console methods to add to debug panel
+        const originalConsole = {
+            log: console.log.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console)
+        };
+
+        console.log = function (...args) {
+            originalConsole.log(...args);
+            logDebug('[LOG] ' + args.join(' '));
+        };
+
+        console.warn = function (...args) {
+            originalConsole.warn(...args);
+            logDebug('[WARN] ' + args.join(' '));
+        };
+
+        console.error = function (...args) {
+            originalConsole.error(...args);
+            logDebug('[ERROR] ' + args.join(' '));
+            toggleDebug(); // Show debug on error
+        };
+    </script>
+
+    <!-- Replace the load data and app script section -->
+    <script>
+        // Check for required libraries
+        window.addEventListener('load', function () {
+            const TIMEOUT_MS = 300000; // 5 minutes
+            const POLL_INTERVAL_MS = 100; // Check every 100ms
+
+            const checkDependency = (name) => {
+                const result = (() => {
+                    switch (name) {
+                        case 'React': return typeof React !== 'undefined';
+                        case 'ReactDOM': return typeof ReactDOM !== 'undefined';
+                        case 'D3': return typeof d3 !== 'undefined';
+                        case 'Babel': return typeof Babel !== 'undefined' && typeof Babel.transform === 'function';
+                        default: return false;
+                    }
+                })();
+                console.log(`Checking ${name}: ${result}`);
+                return result;
+            };
+
+            const waitForDependencies = async () => {
+                const dependencies = ['React', 'ReactDOM', 'D3', 'Babel'];
+                const startTime = Date.now();
+
+                while (true) {
+                    const missingDeps = dependencies.filter(dep => !checkDependency(dep));
+
+                    if (missingDeps.length === 0) {
+                        console.log('All dependencies loaded successfully!');
+                        return true;
+                    }
+
+                    console.log(`Waiting for dependencies: ${missingDeps.join(', ')}`);
+
+                    if (Date.now() - startTime > TIMEOUT_MS) {
+                        throw new Error(`Timeout waiting for dependencies: ${missingDeps.join(', ')}`);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+                }
+            };
+
+            const loadScript = (src, type = 'text/javascript') => {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.type = type;
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = (e) => reject(new Error(`Failed to load script ${src}: ${e.message}`));
+                    document.body.appendChild(script);
+                });
+            };
+
+            const loadBabelScript = async (src) => {
+                try {
+                    const response = await fetch(src);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const content = await response.text();
+
+                    console.log('Transforming script with Babel...');
+                    const transformed = Babel.transform(content, {
+                        presets: ['react', 'env'],
+                        plugins: [
+                            // Using the built-in plugins that come with Babel standalone
+                            'proposal-optional-chaining',
+                            'proposal-nullish-coalescing-operator'
+                        ],
+                        filename: src,
+                        sourceType: 'module'
+                    }).code;
+
+                    const script = document.createElement('script');
+                    script.type = 'text/javascript';
+                    script.textContent = transformed;
+                    document.body.appendChild(script);
+
+                    console.log('Script transformed and loaded successfully');
+                } catch (error) {
+                    console.error('Babel transformation error details:', error);
+                    throw new Error(`Failed to load and transform script ${src}: ${error.message}`);
+                }
+            };
+
+            const initApp = async () => {
+                try {
+                    console.log('Starting app initialization...');
+                    await waitForDependencies();
+                    updateLoadingProgress(LoadingStates.DATA);
+
+                    console.log('Loading visualization data...');
+                    await loadScript('visualization-data.js');
+                    console.log('Visualization data loaded');
+
+                    if (!window.visualizationData) {
+                        throw new Error('Visualization data not defined!');
+                    }
+
+                    updateLoadingProgress(LoadingStates.APP);
+                    console.log('Loading app script...');
+
+                    // Use loadBabelScript instead of loadScript for app.js
+                    await loadBabelScript('app.js');
+                    console.log('App script transformed and loaded!');
+
+                    if (!window.App) {
+                        throw new Error('App component not defined after loading!');
+                    }
+
+                    // Render the app
+                    console.log('Rendering app...');
+                    ReactDOM.render(
+                        React.createElement(window.App, { data: window.visualizationData }),
+                        document.getElementById('root')
+                    );
+
+                    updateLoadingProgress(LoadingStates.COMPLETE);
+                } catch (error) {
+                    console.error('Failed to initialize app:', error);
+                    updateLoadingProgress({
+                        progress: 0,
+                        message: `Error: ${error.message}`
+                    });
+                    throw error; // Re-throw to see full stack trace in console
+                }
+            };
+
+            initApp();
+        });
+    </script>
+
+</body>
+
+</html>

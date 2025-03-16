@@ -136,3 +136,4 @@ cython_debug/
 analysis_output*
 architecture*
 debug*
+kafka_visualization*

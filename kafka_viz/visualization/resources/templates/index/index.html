@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kafka Visualization Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <h1>Kafka Visualizations</h1>
+            <p>Select a visualization type below to explore your Kafka architecture.</p>
+            
+            <div class="visualization-list">
+                {visualization_links}
+            </div>
+            
+            <div class="info-section">
+                <h2>Analysis Summary</h2>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value">{service_count}</div>
+                        <div class="stat-label">Services</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{topic_count}</div>
+                        <div class="stat-label">Topics</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{schema_count}</div>
+                        <div class="stat-label">Schemas</div>
+                    </div>
+                </div>
+                
+                <h2>About</h2>
+                <p>These visualizations were generated using Kafka-Viz, a tool for analyzing and visualizing Kafka microservice architectures.</p>
+                <p>Each visualization offers a different perspective on your architecture.</p>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="preview-container">
+                <div class="preview-header">
+                    <h2>Kafka Architecture Visualization</h2>
+                    <p>Select a visualization type from the sidebar to begin exploring your architecture.</p>
+                </div>
+                <div class="preview-image">
+                    <svg viewBox="0 0 800 500" class="preview-svg">
+                        <!-- Service nodes -->
+                        <circle cx="200" cy="150" r="30" class="node-service"></circle>
+                        <text x="200" y="150" class="node-text">Service A</text>
+                        
+                        <circle cx="400" cy="150" r="30" class="node-service"></circle>
+                        <text x="400" y="150" class="node-text">Service B</text>
+                        
+                        <circle cx="600" cy="150" r="30" class="node-service"></circle>
+                        <text x="600" y="150" class="node-text">Service C</text>
+                        
+                        <!-- Topic nodes -->
+                        <circle cx="300" cy="300" r="25" class="node-topic"></circle>
+                        <text x="300" y="300" class="node-text">Topic 1</text>
+                        
+                        <circle cx="500" cy="300" r="25" class="node-topic"></circle>
+                        <text x="500" y="300" class="node-text">Topic 2</text>
+                        
+                        <!-- Links -->
+                        <line x1="200" y1="150" x2="300" y2="300" class="link-produces"></line>
+                        <line x1="300" y1="300" x2="400" y2="150" class="link-consumes"></line>
+                        <line x1="400" y1="150" x2="500" y2="300" class="link-produces"></line>
+                        <line x1="500" y1="300" x2="600" y2="150" class="link-consumes"></line>
+                    </svg>
+                </div>
+                <div class="preview-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #4caf50;"></div>
+                        <div class="legend-label">Service</div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #2196f3;"></div>
+                        <div class="legend-label">Topic</div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff5722;"></div>
+                        <div class="legend-label">Produces</div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #9c27b0;"></div>
+                        <div class="legend-label">Consumes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
