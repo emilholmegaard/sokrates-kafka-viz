@@ -42,6 +42,10 @@ try {
         const [selectedNode, setSelectedNode] = React.useState(null);
         const [selectedSchema, setSelectedSchema] = React.useState(null);
         const [searchTerm, setSearchTerm] = React.useState("");
+        const [activeSection, setActiveSection] = React.useState("schemas"); // Add this line
+        const [selectedTopic, setSelectedTopic] = React.useState(null);
+        const [selectedProducer, setSelectedProducer] = React.useState(null);
+        const [selectedConsumer, setSelectedConsumer] = React.useState(null);
 
         const filteredSchemas = React.useMemo(() =>
             window.visualizationData.schemas.filter(schema =>
@@ -53,6 +57,59 @@ try {
             [searchTerm]
         );
 
+        const filteredProducers = React.useMemo(() =>
+            [...new Set(window.visualizationData.nodes
+                .filter(node => node.type === 'service')
+                .map(node => node.name))]
+                .filter(name => name.toLowerCase().includes(searchTerm.toLowerCase())),
+            [searchTerm]
+        );
+
+        const filteredConsumers = React.useMemo(() =>
+            [...new Set(window.visualizationData.nodes
+                .filter(node => node.type === 'service')
+                .map(node => node.name))]
+                .filter(name => name.toLowerCase().includes(searchTerm.toLowerCase())),
+            [searchTerm]
+        );
+
+        const filteredTopics = React.useMemo(() =>
+            window.visualizationData.nodes
+                .filter(node => node.type === 'topic')
+                .filter(node => node.name.toLowerCase().includes(searchTerm.toLowerCase())),
+            [searchTerm]
+        );
+
+        // Add these handler functions inside the App component
+        const handleSchemaSelect = (schemaName) => {
+            setSelectedSchema(schemaName === selectedSchema ? null : schemaName);
+            setSelectedTopic(null);
+            setSelectedProducer(null);
+            setSelectedConsumer(null);
+        };
+
+        const handleTopicSelect = (topicName) => {
+            console.log('Topic selected:', topicName);
+            setSelectedTopic(topicName === selectedTopic ? null : topicName);
+            setSelectedSchema(null);
+            setSelectedProducer(null);
+            setSelectedConsumer(null);
+        };
+
+        const handleProducerSelect = (producer) => {
+            setSelectedProducer(producer === selectedProducer ? null : producer);
+            setSelectedTopic(null);
+            setSelectedSchema(null);
+            setSelectedConsumer(null);
+        };
+
+        const handleConsumerSelect = (consumer) => {
+            setSelectedConsumer(consumer === selectedConsumer ? null : consumer);
+            setSelectedTopic(null);
+            setSelectedSchema(null);
+            setSelectedProducer(null);
+        };
+
         return (
             <div className="app-container">
                 <Graph
@@ -60,7 +117,9 @@ try {
                     selectedNode={selectedNode}
                     setSelectedNode={setSelectedNode}
                     selectedSchema={selectedSchema}
-                    setSelectedSchema={setSelectedSchema}
+                    selectedTopic={selectedTopic}
+                    selectedProducer={selectedProducer}
+                    selectedConsumer={selectedConsumer}
                 />
                 <div className="sidebar">
                     <h2>Kafka Communication Details</h2>
@@ -68,31 +127,148 @@ try {
                         <NodeDetails node={selectedNode} data={window.visualizationData} />
                     ) : (
                         <>
-                            <h3>Schemas</h3>
                             <input
                                 type="text"
-                                placeholder="Search schemas..."
+                                placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{ width: '100%', marginBottom: '1rem', padding: '0.5rem' }}
                             />
-                            {filteredSchemas.map((schema, index) => (
-                                <div
-                                    key={index}
-                                    className="schema-item"
-                                    onClick={() => setSelectedSchema(schema.name === selectedSchema ? null : schema.name)}
-                                    style={{ cursor: 'pointer', backgroundColor: schema.name === selectedSchema ? '#e3f2fd' : '#f5f5f5' }}
-                                >
-                                    <div className="schema-name">{schema.name}</div>
-                                    <div className="schema-type">{schema.type}</div>
-                                    <div className="schema-namespace">{schema.namespace}</div>
-                                    <div className="schema-services">
-                                        {schema.services.map((service, serviceIndex) => (
-                                            <span key={serviceIndex} className="schema-service">{service}</span>
-                                        ))}
+
+                            <div className="accordion-container">
+                                <div className="collapsible-section">
+                                    <div
+                                        className="section-header"
+                                        onClick={() => setActiveSection(activeSection === "schemas" ? "" : "schemas")}
+                                    >
+                                        <h3>Schemas ({filteredSchemas.length})</h3>
+                                        <span>{activeSection === "schemas" ? "▼" : "▶"}</span>
                                     </div>
+                                    {activeSection === "schemas" && (
+                                        <div className="section-content">
+                                            {filteredSchemas.map((schema, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="schema-item"
+                                                    onClick={() => handleSchemaSelect(schema.name)}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        backgroundColor: schema.name === selectedSchema ? '#e3f2fd' : '#f5f5f5'
+                                                    }}
+                                                >
+                                                    <div className="schema-name">{schema.name}</div>
+                                                    <div className="schema-type">{schema.type}</div>
+                                                    <div className="schema-namespace">{schema.namespace}</div>
+                                                    <div className="schema-services">
+                                                        {schema.services.map((service, serviceIndex) => (
+                                                            <span key={serviceIndex} className="schema-service">{service}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+
+                                <div className="collapsible-section">
+                                    <div
+                                        className="section-header"
+                                        onClick={() => setActiveSection(activeSection === "producers" ? "" : "producers")}
+                                    >
+                                        <h3>Producers ({filteredProducers.length})</h3>
+                                        <span>{activeSection === "producers" ? "▼" : "▶"}</span>
+                                    </div>
+                                    {activeSection === "producers" && (
+                                        <div className="section-content">
+                                            {filteredProducers.map((producer, index) => {
+                                                const producerNode = window.visualizationData.nodes.find(n => n.name === producer && n.type === 'service');
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="list-item"
+                                                        onClick={() => handleProducerSelect(producer)}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            backgroundColor: producer === selectedProducer ? '#e3f2fd' : '#f5f5f5'
+                                                        }}
+                                                    >
+                                                        <div className="item-name">{producer}</div>
+                                                        <div className="item-details">
+                                                            <div>Language: {producerNode?.language || 'N/A'}</div>
+                                                            <div>Topics: {producerNode?.produces?.length || 0}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="collapsible-section">
+                                    <div
+                                        className="section-header"
+                                        onClick={() => setActiveSection(activeSection === "consumers" ? "" : "consumers")}
+                                    >
+                                        <h3>Consumers ({filteredConsumers.length})</h3>
+                                        <span>{activeSection === "consumers" ? "▼" : "▶"}</span>
+                                    </div>
+                                    {activeSection === "consumers" && (
+                                        <div className="section-content">
+                                            {filteredConsumers.map((consumer, index) => {
+                                                const consumerNode = window.visualizationData.nodes.find(n => n.name === consumer && n.type === 'service');
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="list-item"
+                                                        onClick={() => handleConsumerSelect(consumer)}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            backgroundColor: consumer === selectedConsumer ? '#e3f2fd' : '#f5f5f5'
+                                                        }}
+                                                    >
+                                                        <div className="item-name">{consumer}</div>
+                                                        <div className="item-details">
+                                                            <div>Language: {consumerNode?.language || 'N/A'}</div>
+                                                            <div>Topics: {consumerNode?.consumes?.length || 0}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="collapsible-section">
+                                    <div
+                                        className="section-header"
+                                        onClick={() => setActiveSection(activeSection === "topics" ? "" : "topics")}
+                                    >
+                                        <h3>Topics ({filteredTopics.length})</h3>
+                                        <span>{activeSection === "topics" ? "▼" : "▶"}</span>
+                                    </div>
+                                    {activeSection === "topics" && (
+                                        <div className="section-content">
+                                            {filteredTopics.map((topic, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="list-item"
+                                                    onClick={() => handleTopicSelect(topic.name)}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        backgroundColor: topic.name === selectedTopic ? '#e3f2fd' : '#f5f5f5'
+                                                    }}
+                                                >
+                                                    <div className="item-name">{topic.name}</div>
+                                                    <div className="item-details">
+                                                        <div>Producers: {topic.producers?.length || 0}</div>
+                                                        <div>Consumers: {topic.consumers?.length || 0}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>
@@ -101,10 +277,19 @@ try {
     };
 
     // Graph component
-    const Graph = ({ data, selectedNode, setSelectedNode, selectedSchema, setSelectedSchema }) => {
-        console.log('Graph component rendering');
+    const Graph = ({ data, selectedNode, setSelectedNode, selectedSchema, selectedTopic, selectedProducer, selectedConsumer }) => {
         const svgRef = React.useRef(null);
         const [simulation, setSimulation] = React.useState(null);
+        const [showIsolatedNodes, setShowIsolatedNodes] = React.useState(true);
+        // Add refs for D3 selections
+        const nodeRef = React.useRef(null);
+        const labelRef = React.useRef(null);
+
+        const isNodeConnected = (nodeId) => {
+            return data.links.some(link =>
+                link.source.id === nodeId || link.target.id === nodeId
+            );
+        };
 
         // Initialize and update the D3 force simulation
         React.useEffect(() => {
@@ -139,14 +324,48 @@ try {
                     .attr("width", width)
                     .attr("height", height);
 
-                // Add zoom behavior
+                // Add zoom behavior with custom handling
                 const zoom = d3.zoom()
                     .scaleExtent([0.1, 4])
                     .on("zoom", (event) => {
                         g.attr("transform", event.transform);
                     });
 
-                svg.call(zoom);
+                // Custom zoom handling
+                svg.call(zoom)
+                    .on("wheel.zoom", null)
+                    .on("touchstart.zoom", null)
+                    .on("touchmove.zoom", null)
+                    .on("touchend.zoom", null);
+
+                // Add non-passive wheel listener
+                svg.node().addEventListener("wheel", event => {
+                    event.preventDefault();
+                    const delta = event.deltaY;
+                    const currentTransform = d3.zoomTransform(svg.node());
+                    const newScale = delta > 0
+                        ? currentTransform.k * 0.95
+                        : currentTransform.k * 1.05;
+
+                    const transform = d3.zoomIdentity
+                        .translate(currentTransform.x, currentTransform.y)
+                        .scale(newScale);
+
+                    svg.call(zoom.transform, transform);
+                }, { passive: false });
+
+                // Add non-passive touch handlers
+                svg.node().addEventListener("touchstart", event => {
+                    if (event.touches.length === 2) {
+                        event.preventDefault();
+                    }
+                }, { passive: false });
+
+                svg.node().addEventListener("touchmove", event => {
+                    if (event.touches.length === 2) {
+                        event.preventDefault();
+                    }
+                }, { passive: false });
 
                 const g = svg.append("g");
 
@@ -223,6 +442,10 @@ try {
                         const name = d.name;
                         return name.length > 20 ? name.substring(0, 17) + '...' : name;
                     });
+
+                // Store selections in refs
+                nodeRef.current = node;
+                labelRef.current = label;
 
                 console.log('Visualization elements created successfully');
 
@@ -334,6 +557,98 @@ try {
                     link.attr("stroke-width", 2);
                 }
 
+                // Handle producer highlighting
+                if (selectedProducer) {
+                    const producerTopics = data.links
+                        .filter(link => {
+                            const source = data.nodes.find(n => n.id === link.source.id);
+                            return source.name === selectedProducer && link.type === 'produces';
+                        })
+                        .map(link => link.target.id);
+
+                    node.attr("opacity", d => {
+                        if (d.name === selectedProducer) return 1;
+                        if (d.type === 'topic' && producerTopics.includes(d.id)) return 1;
+                        return 0.2;
+                    });
+
+                    link.attr("opacity", d => {
+                        const source = data.nodes.find(n => n.id === d.source.id);
+                        return source.name === selectedProducer ? 1 : 0.1;
+                    });
+
+                    label.attr("opacity", d => {
+                        if (d.name === selectedProducer) return 1;
+                        if (d.type === 'topic' && producerTopics.includes(d.id)) return 1;
+                        return 0.2;
+                    });
+                }
+
+                // Handle consumer highlighting
+                if (selectedConsumer) {
+                    const consumerTopics = data.links
+                        .filter(link => {
+                            const target = data.nodes.find(n => n.id === link.target.id);
+                            return target.name === selectedConsumer && link.type === 'consumes';
+                        })
+                        .map(link => link.source.id);
+
+                    node.attr("opacity", d => {
+                        if (d.name === selectedConsumer) return 1;
+                        if (d.type === 'topic' && consumerTopics.includes(d.id)) return 1;
+                        return 0.2;
+                    });
+
+                    link.attr("opacity", d => {
+                        const target = data.nodes.find(n => n.id === d.target.id);
+                        return target.name === selectedConsumer ? 1 : 0.1;
+                    });
+
+                    label.attr("opacity", d => {
+                        if (d.name === selectedConsumer) return 1;
+                        if (d.type === 'topic' && consumerTopics.includes(d.id)) return 1;
+                        return 0.2;
+                    });
+                }
+
+                // Handle topic highlighting
+                if (selectedTopic) {
+                    const topicNode = data.nodes.find(n => n.name === selectedTopic);
+                    const relatedLinks = data.links.filter(link =>
+                        (link.source.id === topicNode.id || link.target.id === topicNode.id)
+                    );
+
+                    const relatedServices = new Set();
+                    relatedLinks.forEach(link => {
+                        const serviceNode = link.source.id === topicNode.id ? link.target : link.source;
+                        relatedServices.add(serviceNode.id);
+                    });
+
+                    node.attr("opacity", d => {
+                        if (d.name === selectedTopic) return 1;
+                        if (relatedServices.has(d.id)) return 1;
+                        return 0.2;
+                    });
+
+                    link.attr("opacity", d => {
+                        if (d.source.id === topicNode.id || d.target.id === topicNode.id) return 1;
+                        return 0.1;
+                    });
+
+                    label.attr("opacity", d => {
+                        if (d.name === selectedTopic) return 1;
+                        if (relatedServices.has(d.id)) return 1;
+                        return 0.2;
+                    });
+                }
+
+                // Reset opacity if nothing is selected
+                if (!selectedSchema && !selectedProducer && !selectedConsumer && !selectedTopic) {
+                    node.attr("opacity", 1);
+                    link.attr("opacity", 1);
+                    label.attr("opacity", 1);
+                }
+
                 // Add legend
                 // Get the SVG dimensions
                 const w = svg.node().getBoundingClientRect().width;
@@ -406,7 +721,22 @@ try {
             } catch (error) {
                 console.error('Error in Graph useEffect:', error);
             }
-        }, [data, selectedNode, selectedSchema, setSelectedNode]);
+        }, [data, selectedNode, selectedSchema, selectedTopic, selectedProducer, selectedConsumer, setSelectedNode, showIsolatedNodes]);
+
+        // Update node visibility function
+        const updateNodeVisibility = () => {
+            if (nodeRef.current && labelRef.current) {
+                nodeRef.current.style("display", d =>
+                    showIsolatedNodes || isNodeConnected(d.id) ? "block" : "none"
+                );
+                labelRef.current.style("display", d =>
+                    showIsolatedNodes || isNodeConnected(d.id) ? "block" : "none"
+                );
+            }
+        };
+
+        // Call updateNodeVisibility when needed
+        updateNodeVisibility();
 
         return (
             <div className="graph-container">
@@ -415,12 +745,24 @@ try {
                     <button onClick={() => {
                         const svg = d3.select(svgRef.current);
                         svg.call(d3.zoom().transform, d3.zoomIdentity);
-                    }}>Reset View</button>
+                    }}>
+                        Reset View
+                    </button>
                     <button onClick={() => {
                         if (simulation) {
                             simulation.alpha(1).restart();
                         }
-                    }}>Rearrange</button>
+                    }}>
+                        Rearrange
+                    </button>
+                    <button onClick={() => {
+                        setShowIsolatedNodes(!showIsolatedNodes);
+                        if (simulation) {
+                            simulation.alpha(1).restart();
+                        }
+                    }}>
+                        {showIsolatedNodes ? "Hide Isolated" : "Show Isolated"}
+                    </button>
                 </div>
             </div>
         );

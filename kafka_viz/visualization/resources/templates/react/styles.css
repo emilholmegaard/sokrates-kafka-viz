@@ -34,6 +34,63 @@ body {
     overflow-y: auto;
 }
 
+.accordion-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 100px);
+    /* Adjust based on header height */
+    overflow-y: auto;
+}
+
+.collapsible-section {
+    margin-bottom: 1rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #f0f0f0;
+    cursor: pointer;
+}
+
+.section-content {
+    padding: 0.5rem;
+}
+
+.list-item {
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.item-name {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.item-details {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.schema-item {
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+}
+
+.schema-service {
+    display: inline-block;
+    margin: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background-color: #e0e0e0;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
 .node-service {
     fill: #4caf50;
     stroke: #388e3c;
@@ -99,6 +156,8 @@ body {
     font-size: 0.9rem;
 }
 
+
+
 .controls {
     position: absolute;
     top: 1rem;
@@ -107,6 +166,23 @@ body {
     padding: 0.5rem;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.controls button {
+    margin-right: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.controls button:hover {
+    background-color: #388e3c;
 }
 
 button {
@@ -125,16 +201,13 @@ button:hover {
 
 .legend {
     position: fixed;
-    /* Change from absolute to fixed */
     bottom: 1rem;
-    left: 1rem;
+    right: 1rem;
     background-color: rgba(255, 255, 255, 0.9);
-    /* Slightly more opaque background */
     padding: 0.5rem;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
     z-index: 1000;
-    /* Ensure legend stays on top */
 }
 
 .legend-item {
