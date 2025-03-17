@@ -335,9 +335,15 @@ try {
                 }
 
                 // Add legend
+                // Get the SVG dimensions
+                const w = svg.node().getBoundingClientRect().width;
+                const h = svg.node().getBoundingClientRect().height;
+
+                // Position the legend group in the bottom right
                 const legend = svg.append("g")
                     .attr("class", "legend")
-                    .attr("transform", "translate(10, 10)");
+                    .attr("transform", `translate(${w - 120}, ${h - 100})`);
+
 
                 const legendItems = [
                     { color: "#4caf50", label: "Service" },
